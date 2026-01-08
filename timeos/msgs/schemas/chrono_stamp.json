@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/t-symmetry/TimeOS/schemas/chrono_stamp.json",
+  "title": "ChronoStamp",
+  "description": "A timestamp with uncertainty bounds and provenance tracking",
+  "type": "object",
+  "required": ["frame_id", "t"],
+  "properties": {
+    "frame_id": {
+      "type": "string",
+      "description": "Reference frame identifier"
+    },
+    "t": {
+      "type": "number",
+      "description": "Time coordinate in the reference frame (seconds)"
+    },
+    "t_uncertainty": {
+      "type": "number",
+      "description": "Uncertainty bounds +/- (seconds)",
+      "default": 0.0,
+      "minimum": 0.0
+    },
+    "clock_id": {
+      "type": "string",
+      "description": "Identifier of the source clock",
+      "default": ""
+    },
+    "clock_class": {
+      "type": "string",
+      "description": "Type of clock",
+      "enum": ["atomic", "ntp", "gps", "proper", "sim", "inferred"],
+      "default": "sim"
+    },
+    "provenance": {
+      "type": "array",
+      "description": "Event IDs used to derive this timestamp",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    }
+  }
+}

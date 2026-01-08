@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/t-symmetry/TimeOS/schemas/temporal_frame.json",
+  "title": "TemporalFrame",
+  "description": "A temporal coordinate frame definition",
+  "type": "object",
+  "required": ["frame_id"],
+  "properties": {
+    "frame_id": {
+      "type": "string",
+      "description": "Unique identifier for this frame"
+    },
+    "parent_frame_id": {
+      "type": ["string", "null"],
+      "description": "Parent frame for hierarchical transforms",
+      "default": null
+    },
+    "time_standard": {
+      "type": "string",
+      "description": "Time standard used",
+      "enum": ["TAI", "UTC", "GPS", "TT", "proper_time", "sim"],
+      "default": "TAI"
+    },
+    "spatial_reference": {
+      "type": "string",
+      "description": "Spatial reference system",
+      "enum": ["WGS84", "ICRF", "ECEF", "custom"],
+      "default": "ICRF"
+    },
+    "validity_start": {
+      "type": ["number", "null"],
+      "description": "Start of validity period (null = -infinity)",
+      "default": null
+    },
+    "validity_end": {
+      "type": ["number", "null"],
+      "description": "End of validity period (null = +infinity)",
+      "default": null
+    },
+    "confidence": {
+      "type": "number",
+      "description": "Confidence level for this frame definition",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "default": 1.0
+    },
+    "authority": {
+      "type": "string",
+      "description": "Publisher/authority identity",
+      "default": ""
+    },
+    "tags": {
+      "type": "array",
+      "description": "Metadata tags",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    }
+  }
+}

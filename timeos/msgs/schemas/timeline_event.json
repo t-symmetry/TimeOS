@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/t-symmetry/TimeOS/schemas/timeline_event.json",
+  "title": "TimelineEvent",
+  "description": "A universal envelope for temporal events with causal links",
+  "type": "object",
+  "required": ["event_id", "stamp"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "description": "Unique identifier (UUID)",
+      "format": "uuid"
+    },
+    "stamp": {
+      "$ref": "chrono_stamp.json",
+      "description": "When the event occurred"
+    },
+    "event_type": {
+      "type": "string",
+      "description": "Type of event",
+      "enum": ["observation", "actuation", "annotation", "constraint", "branch", "merge"],
+      "default": "observation"
+    },
+    "payload": {
+      "type": "string",
+      "description": "Event-specific data (base64 encoded)",
+      "contentEncoding": "base64",
+      "default": ""
+    },
+    "payload_schema": {
+      "type": "string",
+      "description": "Schema reference for payload",
+      "default": ""
+    },
+    "parents": {
+      "type": "array",
+      "description": "Event IDs this event causally depends on",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "default": []
+    },
+    "branch_id": {
+      "type": "string",
+      "description": "Timeline branch this event belongs to",
+      "default": "main"
+    },
+    "author": {
+      "type": "string",
+      "description": "Identity of event creator",
+      "default": ""
+    },
+    "seq": {
+      "type": "integer",
+      "description": "Sequence number (per-author)",
+      "minimum": 0,
+      "default": 0
+    }
+  }
+}
