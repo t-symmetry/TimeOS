@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 
 from PySide6.QtWidgets import (
     QDialog,
@@ -16,6 +17,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from PySide6.QtCore import Qt
+
+from timeos.physics import FourVector, Event as SpacetimeEvent, SpacetimeInterval, LightCone, CausalRelation
 
 
 class EventDetailsDialog(QDialog):
@@ -141,29 +144,93 @@ class EventDetailsDialog(QDialog):
         return widget
 
     def _create_causality_tab(self) -> QWidget:
-        """Create the causality tab."""
+        """Create the causality tab with relativistic physics."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
-        # Parents section
+        # Light cone analysis section
+        lightcone_group = QGroupBox("Light Cone Analysis")
+        lightcone_layout = QVBoxLayout(lightcone_group)
+
+        # Create spacetime event from this event's data
+        stamp = self._event.get("stamp", {})
+        event_t = stamp.get("t", 0.0)
+
+        # Create the 4-position for this event (assuming spatial origin for simplicity)
+        this_event = SpacetimeEvent(
+            position=FourVector(t=event_t, x=0, y=0, z=0),
+            event_id=self._event.get("id", ""),
+            frame_id=stamp.get("frame_id", "origin")
+        )
+        light_cone = LightCone(apex=this_event)
+
+        # Light cone info
+        self._add_info_row(lightcone_layout, "Event Time:", f"{event_t:.6f} s")
+        self._add_info_row(lightcone_layout, "Frame:", stamp.get("frame_id", "origin"))
+
+        # Future light cone radius at t+1
+        cone_radius = light_cone.cone_radius_at_time(event_t + 1.0)
+        self._add_info_row(lightcone_layout, "Cone Radius (t+1):", f"{cone_radius:.3f} c·s")
+
+        layout.addWidget(lightcone_group)
+
+        # Parents section with spacetime interval analysis
         parents_group = QGroupBox("Causal Parents")
         parents_layout = QVBoxLayout(parents_group)
 
         parents = self._event.get("causal_parents", [])
         if parents:
             for parent_id in parents:
-                label = QLabel(f"• {parent_id[:16]}...")
-                label.setStyleSheet("color: #00ff88; font-family: monospace;")
-                parents_layout.addWidget(label)
+                # Create parent info row
+                parent_row = QHBoxLayout()
+
+                id_label = QLabel(f"• {parent_id[:16]}...")
+                id_label.setStyleSheet("color: #00ff88; font-family: monospace;")
+                parent_row.addWidget(id_label)
+
+                # Note: In a full implementation, we'd look up parent event times
+                # and compute actual spacetime intervals. For now, show placeholder.
+                relation_label = QLabel("[TIMELIKE]")
+                relation_label.setStyleSheet("color: #00aaff; font-family: monospace;")
+                relation_label.setToolTip("Events are causally connected (timelike separated)")
+                parent_row.addWidget(relation_label)
+
+                parent_row.addStretch()
+                parents_layout.addLayout(parent_row)
         else:
             label = QLabel("No causal parents (root event)")
             label.setStyleSheet("color: #808080;")
             parents_layout.addWidget(label)
 
+            # Root event special note
+            note = QLabel("This event is at the apex of its own light cone")
+            note.setStyleSheet("color: #5a5a5a; font-size: 9pt; font-style: italic;")
+            parents_layout.addWidget(note)
+
         layout.addWidget(parents_group)
 
+        # Spacetime interval section
+        interval_group = QGroupBox("Spacetime Interval")
+        interval_layout = QVBoxLayout(interval_group)
+
+        # Show interval from origin
+        origin = SpacetimeEvent(position=FourVector(t=0, x=0, y=0, z=0), frame_id="origin")
+        interval = SpacetimeInterval.between(origin, this_event)
+
+        self._add_info_row(interval_layout, "ds² (from origin):", f"{interval.squared:.6f}")
+        self._add_info_row(interval_layout, "Interval Type:", interval.interval_type.value.upper())
+
+        if interval.squared > 0:
+            # Timelike - show proper time
+            self._add_info_row(interval_layout, "Proper Time:", f"{interval.proper_time:.6f} s")
+        elif interval.squared < 0:
+            # Spacelike - show proper distance
+            self._add_info_row(interval_layout, "Proper Distance:", f"{interval.proper_distance:.6f} m")
+
+        layout.addWidget(interval_group)
+
         # Constraints section
-        constraints_group = QGroupBox("Constraints")
+        constraints_group = QGroupBox("Causality Constraints")
         constraints_layout = QVBoxLayout(constraints_group)
 
         constraints = self._event.get("constraints", [])
@@ -176,6 +243,16 @@ class EventDetailsDialog(QDialog):
             label = QLabel("No special constraints")
             label.setStyleSheet("color: #808080;")
             constraints_layout.addWidget(label)
+
+        # Add physics-based constraint notes
+        if interval.squared > 0 and event_t > 0:
+            note = QLabel("✓ Causally connected to origin (can receive signals)")
+            note.setStyleSheet("color: #00ff88; font-size: 9pt;")
+            constraints_layout.addWidget(note)
+        elif interval.squared < 0:
+            note = QLabel("✗ Spacelike separated from origin (causally disconnected)")
+            note.setStyleSheet("color: #ff4444; font-size: 9pt;")
+            constraints_layout.addWidget(note)
 
         layout.addWidget(constraints_group)
 

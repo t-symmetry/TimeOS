@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -17,6 +19,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from timeos.gui.models.machine_model import MachineModel
+from timeos.physics import lorentz_factor, SPEED_OF_LIGHT
 
 
 class DisplacementDialog(QDialog):
@@ -90,6 +93,18 @@ class DisplacementDialog(QDialog):
         self._energy_required = self._create_info_row("Energy:", "0.00e+00 J")
         path_layout.addLayout(self._energy_required)
 
+        # Relativistic velocity (beta)
+        self._beta_row = self._create_info_row("β (v/c):", "0.0000")
+        path_layout.addLayout(self._beta_row)
+
+        # Lorentz factor (gamma)
+        self._gamma_row = self._create_info_row("γ:", "1.0000")
+        path_layout.addLayout(self._gamma_row)
+
+        # Proper time for traveler
+        self._proper_time = self._create_info_row("Proper Time:", "0.00 s")
+        path_layout.addLayout(self._proper_time)
+
         # Paradox probability
         self._paradox_prob = self._create_info_row("Paradox Prob:", "0.0%")
         path_layout.addLayout(self._paradox_prob)
@@ -153,7 +168,7 @@ class DisplacementDialog(QDialog):
         self._cancel_btn.clicked.connect(self.reject)
 
     def _on_target_changed(self) -> None:
-        """Handle target change - recalculate path."""
+        """Handle target change - recalculate path with relativistic physics."""
         target_time = self._time_input.value()
         frame = self._frame_combo.currentText()
 
@@ -164,28 +179,55 @@ class DisplacementDialog(QDialog):
         # Calculate displacement
         delta_t = target_time - current_time
 
-        # Estimate energy (simplified formula)
-        energy = abs(delta_t) * 1e9  # 1 GJ per second
+        # Relativistic calculations
+        # Assume displacement requires accelerating to some fraction of c
+        # Higher displacements require higher velocities
+        # Model: v = c * tanh(|Δt| / t_scale) where t_scale controls velocity scaling
+        t_scale = 1e6  # Time scale for velocity saturation
+        beta = math.tanh(abs(delta_t) / t_scale)  # v/c approaches 1 asymptotically
 
-        # Estimate risk based on delta
-        if abs(delta_t) < 1:
+        # Calculate Lorentz factor
+        if beta < 0.9999:
+            gamma = lorentz_factor(beta)
+        else:
+            gamma = 100.0  # Cap at very high gamma for display
+
+        # Proper time experienced by traveler: τ = t / γ
+        coord_duration = abs(delta_t) * 0.001  # Duration in coordinate time
+        proper_time_val = coord_duration / gamma if gamma > 0 else coord_duration
+
+        # Relativistic energy: E = γmc²
+        # Using effective mass of 1kg for the "temporal payload"
+        rest_mass = 1.0  # kg (effective temporal payload mass)
+        rest_energy = rest_mass * SPEED_OF_LIGHT ** 2  # E₀ = mc²
+        total_energy = gamma * rest_energy  # E = γmc²
+        kinetic_energy = (gamma - 1) * rest_energy  # K = (γ-1)mc²
+
+        # Use kinetic energy for display (energy needed beyond rest mass)
+        energy = kinetic_energy if beta > 0 else abs(delta_t) * 1e6
+
+        # Estimate risk based on gamma (high relativistic factor = higher risk)
+        if gamma < 1.01:
             risk = "MINIMAL"
             risk_color = "#00ff88"
-        elif abs(delta_t) < 100:
+        elif gamma < 1.25:
             risk = "LOW"
             risk_color = "#00ff88"
-        elif abs(delta_t) < 10000:
+        elif gamma < 2.0:
             risk = "MODERATE"
             risk_color = "#ffaa00"
-        else:
+        elif gamma < 10.0:
             risk = "HIGH"
             risk_color = "#ff4444"
+        else:
+            risk = "EXTREME"
+            risk_color = "#ff0000"
 
-        # Estimate paradox probability
-        paradox_prob = min(0.1, abs(delta_t) / 1e8) * 100
+        # Estimate paradox probability (higher at extreme relativistic speeds)
+        paradox_prob = min(50.0, (gamma - 1) * 5.0)
 
         # Update display
-        self._update_value("Type", "DIRECT" if abs(delta_t) < 1e6 else "PHASED")
+        self._update_value("Type", "DIRECT" if beta < 0.5 else ("PHASED" if beta < 0.9 else "EXTREME"))
 
         risk_label = self._find_value_label("Risk")
         if risk_label:
@@ -193,17 +235,26 @@ class DisplacementDialog(QDialog):
             risk_label.setStyleSheet(f"color: {risk_color}; font-family: monospace;")
 
         self._update_value("Energy", f"{energy:.2e} J")
-        self._update_value("Paradox Prob", f"{paradox_prob:.1f}%")
-        self._update_value("Duration", f"{abs(delta_t) * 0.001:.2f} s")
+        self._update_value("β(v/c)", f"{beta:.4f}")
+        self._update_value("γ", f"{gamma:.4f}")
+        self._update_value("ProperTime", f"{proper_time_val:.4f} s")
+        self._update_value("ParadoxProb", f"{paradox_prob:.1f}%")
+        self._update_value("Duration", f"{coord_duration:.4f} s")
 
         # Show warnings if needed
         warnings = []
+        if gamma > 2.0:
+            warnings.append(f"Relativistic regime: γ={gamma:.2f} causes significant time dilation")
+        if beta > 0.9:
+            warnings.append(f"Near-lightspeed velocity: β={beta:.3f}c")
         if abs(delta_t) > 1e9:
             warnings.append("Large displacement may cause timeline instability")
-        if paradox_prob > 1:
+        if paradox_prob > 5:
             warnings.append("Elevated paradox risk - review causality constraints")
         if energy > 1e15:
             warnings.append("Energy exceeds standard reserves")
+        if proper_time_val < coord_duration * 0.5:
+            warnings.append(f"Traveler will age {(coord_duration - proper_time_val):.2f}s less than coordinate time")
 
         if warnings:
             self._warnings_group.setVisible(True)

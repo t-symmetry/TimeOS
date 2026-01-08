@@ -1,4 +1,4 @@
-"""Position Display Widget - Current temporal position."""
+"""Position Display Widget - Current temporal position with relativistic quantities."""
 
 from __future__ import annotations
 
@@ -8,14 +8,16 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QGroupBox,
+    QFrame,
 )
 from PySide6.QtCore import Qt
 
 from timeos.gui.models.machine_model import MachineModel
+from timeos.physics import lorentz_factor
 
 
 class PositionDisplay(QGroupBox):
-    """Display current temporal position."""
+    """Display current temporal position with relativistic physics."""
 
     def __init__(self, model: MachineModel, parent: QWidget | None = None):
         super().__init__("POSITION", parent)
@@ -27,7 +29,7 @@ class PositionDisplay(QGroupBox):
     def _setup_ui(self) -> None:
         """Set up the display UI."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
         # Current time (large display)
         time_layout = QHBoxLayout()
@@ -95,6 +97,70 @@ class PositionDisplay(QGroupBox):
 
         layout.addLayout(unc_layout)
 
+        # Separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: #3a3a3a;")
+        layout.addWidget(sep)
+
+        # Relativistic quantities section
+        rel_label = QLabel("RELATIVISTIC")
+        rel_label.setStyleSheet("color: #5a5a5a; font-size: 8pt;")
+        layout.addWidget(rel_label)
+
+        # Lorentz factor (gamma)
+        gamma_layout = QHBoxLayout()
+        gamma_label = QLabel("γ =")
+        gamma_label.setStyleSheet("color: #808080;")
+        gamma_label.setToolTip("Lorentz factor: γ = 1/√(1-v²/c²)")
+        gamma_layout.addWidget(gamma_label)
+
+        self._gamma_value = QLabel("1.000")
+        self._gamma_value.setStyleSheet("color: #00aaff; font-family: monospace;")
+        self._gamma_value.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._gamma_value.setToolTip("Time dilation factor")
+        gamma_layout.addWidget(self._gamma_value)
+
+        layout.addLayout(gamma_layout)
+
+        # Proper time (tau)
+        tau_layout = QHBoxLayout()
+        tau_label = QLabel("τ =")
+        tau_label.setStyleSheet("color: #808080;")
+        tau_label.setToolTip("Proper time: time experienced by traveler")
+        tau_layout.addWidget(tau_label)
+
+        self._tau_value = QLabel("0.000")
+        self._tau_value.setStyleSheet("color: #00aaff; font-family: monospace;")
+        self._tau_value.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._tau_value.setToolTip("Proper time (traveler's clock)")
+        tau_layout.addWidget(self._tau_value)
+
+        tau_unit = QLabel("s")
+        tau_unit.setStyleSheet("color: #808080;")
+        tau_layout.addWidget(tau_unit)
+
+        layout.addLayout(tau_layout)
+
+        # Velocity as fraction of c
+        beta_layout = QHBoxLayout()
+        beta_label = QLabel("β =")
+        beta_label.setStyleSheet("color: #808080;")
+        beta_label.setToolTip("Velocity as fraction of c: β = v/c")
+        beta_layout.addWidget(beta_label)
+
+        self._beta_value = QLabel("0.000")
+        self._beta_value.setStyleSheet("color: #00aaff; font-family: monospace;")
+        self._beta_value.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self._beta_value.setToolTip("v/c (fraction of light speed)")
+        beta_layout.addWidget(self._beta_value)
+
+        beta_unit = QLabel("c")
+        beta_unit.setStyleSheet("color: #808080;")
+        beta_layout.addWidget(beta_unit)
+
+        layout.addLayout(beta_layout)
+
     def _connect_signals(self) -> None:
         """Connect model signals."""
         self._model.state_changed.connect(self._update_display)
@@ -122,3 +188,19 @@ class PositionDisplay(QGroupBox):
         # Uncertainty
         uncertainty = state.get("uncertainty", 0.0)
         self._uncertainty_value.setText(f"{uncertainty:.6f}")
+
+        # Relativistic quantities
+        beta = state.get("velocity_beta", 0.0)
+        gamma = state.get("lorentz_gamma", 1.0)
+        proper_time = state.get("proper_time", t)
+
+        # Calculate gamma from beta if not provided
+        if gamma == 1.0 and beta > 0:
+            try:
+                gamma = lorentz_factor(beta)
+            except ValueError:
+                gamma = 1.0
+
+        self._gamma_value.setText(f"{gamma:.4f}")
+        self._beta_value.setText(f"{beta:.4f}")
+        self._tau_value.setText(f"{proper_time:.3f}")

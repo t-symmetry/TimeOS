@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import random
 from datetime import datetime
 from typing import Any
@@ -12,6 +13,7 @@ from timeos.hardware.drivers.simulated import SimulatedTimeMachine
 from timeos.hardware.timeline_navigator import NavigationTarget
 from timeos.hardware.base import ModuleStatus
 from timeos.msgs import ChronoStamp, TemporalFrame
+from timeos.physics import lorentz_factor
 
 
 class MachineModel(QObject):
@@ -38,6 +40,10 @@ class MachineModel(QObject):
         self._demo = demo
         self._demo_timer: QTimer | None = None
         self._demo_time = 0.0
+
+        # Relativistic state tracking
+        self._velocity_beta = 0.0  # v/c (fraction of light speed)
+        self._proper_time = 0.0    # τ (proper time accumulated)
 
     def initialize(self) -> bool:
         """Initialize the time machine.
@@ -100,8 +106,19 @@ class MachineModel(QObject):
 
     def _demo_tick(self) -> None:
         """Demo mode periodic update."""
-        self._demo_time += 1.0
+        dt_coord = 1.0  # Coordinate time step (seconds)
+        self._demo_time += dt_coord
         self._demo_tick_count += 1
+
+        # Simulate relativistic motion - velocity varies over time
+        # Oscillate between 0 and 0.8c to show time dilation effects
+        self._velocity_beta = 0.4 + 0.4 * math.sin(self._demo_tick_count * 0.3)
+
+        # Calculate proper time: dτ = dt / γ
+        if self._velocity_beta < 1.0:
+            gamma = lorentz_factor(self._velocity_beta)
+            dt_proper = dt_coord / gamma
+            self._proper_time += dt_proper
 
         # Create demo branches after a few ticks to show branch visualization
         if not self._demo_branches_created and self._demo_tick_count >= 3 and self._machine:
@@ -281,6 +298,11 @@ class MachineModel(QObject):
             # Overall
             "initialized": self._initialized,
             "is_displacing": tdu.is_displacing if hasattr(tdu, 'is_displacing') else False,
+
+            # Relativistic quantities
+            "velocity_beta": self._velocity_beta,
+            "lorentz_gamma": lorentz_factor(self._velocity_beta) if 0 < self._velocity_beta < 1 else 1.0,
+            "proper_time": self._proper_time,
         }
 
     def _default_state(self) -> dict[str, Any]:
@@ -306,6 +328,9 @@ class MachineModel(QObject):
             "anchor_strength": 0.0,
             "initialized": False,
             "is_displacing": False,
+            "velocity_beta": 0.0,
+            "lorentz_gamma": 1.0,
+            "proper_time": 0.0,
         }
 
     def get_module_statuses(self) -> dict[str, str]:
