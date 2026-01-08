@@ -149,100 +149,50 @@ class EventDetailsDialog(QDialog):
 
     def _create_causality_tab(self) -> QWidget:
         """Create the causality tab with inspectable constraint checks."""
+        from timeos.gui.widgets.constraint_view import ConstraintView
+
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
-        # Constraint checks section - the main inspectable view
-        checks_group = QGroupBox("Constraint Checks")
-        checks_layout = QVBoxLayout(checks_group)
+        # Use the new ConstraintView widget for visualization
+        constraint_view = ConstraintView()
 
         # Get constraint checks from event data, or generate sample checks
-        checks = self._event.get("constraint_checks", [])
+        raw_checks = self._event.get("constraint_checks", [])
 
-        if not checks:
-            # Generate sample checks for display
-            checks = self._generate_sample_checks()
+        if raw_checks and isinstance(raw_checks[0], ConstraintCheck):
+            # Already ConstraintCheck objects
+            checks = raw_checks
+        elif raw_checks:
+            # Convert dict format to ConstraintCheck objects
+            checks = []
+            for check in raw_checks:
+                status_str = check.get("status", "satisfied")
+                status_map = {
+                    "satisfied": ConstraintStatus.SATISFIED,
+                    "warning": ConstraintStatus.WARNING,
+                    "violated": ConstraintStatus.VIOLATED,
+                    "deferred": ConstraintStatus.DEFERRED,
+                }
+                status = status_map.get(status_str, ConstraintStatus.SATISFIED)
 
-        for check in checks:
-            check_row = QHBoxLayout()
-
-            # Status icon
-            icon = check.get("icon", "✔")
-            status = check.get("status", "satisfied")
-
-            # Color based on status
-            if status == "satisfied":
-                color = "#00ff88"
-            elif status == "warning":
-                color = "#ffaa00"
-            elif status == "deferred":
-                color = "#00aaff"
-            else:
-                color = "#ff4444"
-
-            icon_label = QLabel(icon)
-            icon_label.setStyleSheet(f"color: {color}; font-size: 12pt;")
-            icon_label.setFixedWidth(20)
-            check_row.addWidget(icon_label)
-
-            # Constraint description
-            desc = check.get("description", "Unknown constraint")
-            desc_label = QLabel(f"Constraint: {desc}")
-            desc_label.setStyleSheet("color: #e0e0e0;")
-            check_row.addWidget(desc_label)
-
-            check_row.addStretch()
-
-            # Details
-            details = check.get("details", "")
-            if details:
-                details_label = QLabel(details)
-                details_label.setStyleSheet(f"color: {color}; font-family: monospace; font-size: 9pt;")
-                check_row.addWidget(details_label)
-
-            checks_layout.addLayout(check_row)
-
-        layout.addWidget(checks_group)
-
-        # Paradox risk section
-        risk_group = QGroupBox("Paradox Risk Assessment")
-        risk_layout = QVBoxLayout(risk_group)
-
-        paradox_risk = self._event.get("paradox_risk", 0.0)
-        risk_percent = paradox_risk * 100
-
-        # Risk bar
-        risk_row = QHBoxLayout()
-        risk_label = QLabel("Risk Level:")
-        risk_label.setStyleSheet("color: #808080;")
-        risk_row.addWidget(risk_label)
-
-        # Determine risk color and label
-        if risk_percent < 5:
-            risk_color = "#00ff88"
-            risk_text = f"{risk_percent:.1f}% (nominal)"
-        elif risk_percent < 15:
-            risk_color = "#ffaa00"
-            risk_text = f"{risk_percent:.1f}% (elevated - warning)"
-        elif risk_percent < 30:
-            risk_color = "#ff8800"
-            risk_text = f"{risk_percent:.1f}% (high - branch required)"
+                checks.append(ConstraintCheck(
+                    constraint_name=check.get("description", "Unknown"),
+                    status=status,
+                    message=check.get("details", ""),
+                    details={},
+                ))
         else:
-            risk_color = "#ff4444"
-            risk_text = f"{risk_percent:.1f}% (critical - interlock)"
+            # Generate sample checks for display
+            checks = self._generate_constraint_checks()
 
-        risk_value = QLabel(risk_text)
-        risk_value.setStyleSheet(f"color: {risk_color}; font-family: monospace; font-weight: bold;")
-        risk_row.addWidget(risk_value)
-        risk_row.addStretch()
-        risk_layout.addLayout(risk_row)
+        paradox_risk = self._event.get("paradox_risk", 0.02)
+        constraint_view.set_checks(checks, paradox_risk)
 
-        # Risk thresholds explanation
-        thresholds = QLabel("Thresholds: 5% warning | 15% branch | 30% interlock")
-        thresholds.setStyleSheet("color: #5a5a5a; font-size: 8pt;")
-        risk_layout.addWidget(thresholds)
+        # Connect click signal for interactivity
+        constraint_view.constraint_clicked.connect(self._on_constraint_clicked)
 
-        layout.addWidget(risk_group)
+        layout.addWidget(constraint_view)
 
         # Light cone analysis section
         lightcone_group = QGroupBox("Light Cone Analysis")
@@ -298,45 +248,74 @@ class EventDetailsDialog(QDialog):
         layout.addStretch()
         return widget
 
-    def _generate_sample_checks(self) -> list[dict]:
+    def _generate_constraint_checks(self) -> list[ConstraintCheck]:
         """Generate sample constraint checks for display."""
         stamp = self._event.get("stamp", {})
         event_t = stamp.get("t", 0.0)
         parents = self._event.get("causal_parents", [])
+        branch = self._event.get("branch_id", "main")
 
         checks = [
-            {
-                "icon": "✔",
-                "status": "satisfied",
-                "description": "No self-parent",
-                "details": f"Checked {len(parents)} ancestors" if parents else "No parents to check",
-            },
-            {
-                "icon": "✔",
-                "status": "satisfied",
-                "description": "Temporal ordering",
-                "details": f"Δt = +{event_t:.3f}s" if event_t > 0 else "Root event",
-            },
-            {
-                "icon": "✔",
-                "status": "satisfied",
-                "description": "Light-cone ordering",
-                "details": f"Timelike (Δt = +{event_t:.3f}s)" if event_t > 0 else "At apex",
-            },
-            {
-                "icon": "✔",
-                "status": "satisfied",
-                "description": "Branch coherence",
-                "details": f"Branch '{self._event.get('branch_id', 'main')}' consistent",
-            },
-            {
-                "icon": "⏳",
-                "status": "deferred",
-                "description": "Conservation (soft)",
-                "details": "Deferred (no conservation data)",
-            },
+            ConstraintCheck(
+                constraint_name="No self-parent",
+                status=ConstraintStatus.SATISFIED,
+                message=f"Checked {len(parents)} ancestors" if parents else "No parents to check",
+                details={"ancestors_checked": len(parents)},
+            ),
+            ConstraintCheck(
+                constraint_name="Causal ordering",
+                status=ConstraintStatus.SATISFIED,
+                message=f"Δt = +{event_t:.3f}s" if event_t > 0 else "Root event",
+                details={"delta_t": event_t},
+            ),
+            ConstraintCheck(
+                constraint_name="Light-cone ordering",
+                status=ConstraintStatus.SATISFIED,
+                message=f"Timelike (Δt = +{event_t:.3f}s)" if event_t > 0 else "At apex",
+                details={"interval_type": "timelike", "delta_t": event_t},
+            ),
+            ConstraintCheck(
+                constraint_name="Branch coherence",
+                status=ConstraintStatus.SATISFIED,
+                message=f"Branch '{branch}' consistent",
+                details={"branch": branch},
+            ),
+            ConstraintCheck(
+                constraint_name="Conservation (soft)",
+                status=ConstraintStatus.DEFERRED,
+                message="Deferred (no conservation data)",
+                details={},
+            ),
         ]
         return checks
+
+    def _on_constraint_clicked(self, check: ConstraintCheck) -> None:
+        """Handle constraint card click - show detailed explanation."""
+        from PySide6.QtWidgets import QMessageBox
+
+        # Build detailed message
+        status_text = {
+            ConstraintStatus.SATISFIED: "SATISFIED",
+            ConstraintStatus.WARNING: "WARNING",
+            ConstraintStatus.VIOLATED: "VIOLATED",
+            ConstraintStatus.DEFERRED: "DEFERRED",
+        }.get(check.status, "UNKNOWN")
+
+        details_text = ""
+        if check.details:
+            details_text = "\n".join(f"  {k}: {v}" for k, v in check.details.items())
+
+        msg = QMessageBox(self)
+        msg.setWindowTitle(f"Constraint: {check.constraint_name}")
+        msg.setText(f"<b>{check.constraint_name}</b><br><br>"
+                   f"Status: <b>{status_text}</b><br><br>"
+                   f"{check.message}")
+
+        if details_text:
+            msg.setDetailedText(f"Details:\n{details_text}")
+
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.exec()
 
     def _add_info_row(self, layout: QVBoxLayout, label: str, value: str) -> None:
         """Add an info row to a layout."""
