@@ -481,7 +481,7 @@ class MachineModel(QObject):
         """Get timeline events (from actual timeline, not GUI log).
 
         Returns:
-            List of timeline event dictionaries.
+            List of timeline event dictionaries formatted for EventDetailsDialog.
         """
         if not self._machine:
             return []
@@ -490,13 +490,33 @@ class MachineModel(QObject):
             events = []
             for branch in self._machine.timeline.list_branches():
                 for event in self._machine.timeline.slice(branch_id=branch.branch_id):
+                    # Decode payload if it's bytes
+                    payload = {}
+                    if event.payload:
+                        try:
+                            payload = {"message": event.payload.decode("utf-8")}
+                        except Exception:
+                            payload = {"raw": str(event.payload)}
+
                     events.append({
-                        "event_id": event.event_id,
+                        # Keys for timeline visualization
                         "time": event.stamp.t,
-                        "frame_id": event.stamp.frame_id,
-                        "event_type": event.event_type,
+                        "event_id": event.event_id,
+
+                        # Keys for EventDetailsDialog
+                        "id": event.event_id,
+                        "type": event.event_type,
+                        "stamp": {
+                            "t": event.stamp.t,
+                            "t_uncertainty": event.stamp.t_uncertainty or 0.0,
+                            "frame_id": event.stamp.frame_id,
+                            "clock_id": event.stamp.clock_class or "N/A",
+                        },
                         "branch_id": event.branch_id,
-                        "parents": event.parents,
+                        "sequence": event.seq,
+                        "created_at": "N/A",  # Not tracked in TimelineEvent
+                        "payload": payload,
+                        "causal_parents": event.parents,
                     })
             return sorted(events, key=lambda e: e["time"])
         except Exception:
