@@ -279,6 +279,20 @@ def import_cmd(ctx: click.Context, input_file: str) -> None:
 
 
 @cli.command()
+@click.option("--demo", is_flag=True, help="Launch with demo data.")
+def gui(demo: bool) -> None:
+    """Launch the TimeOS GUI control interface."""
+    try:
+        from timeos.gui import launch
+    except ImportError:
+        click.echo("Error: GUI dependencies not installed.")
+        click.echo("Install with: pip install timeos[gui]")
+        sys.exit(1)
+
+    sys.exit(launch(demo=demo))
+
+
+@cli.command()
 @click.pass_context
 def status(ctx: click.Context) -> None:
     """Show timeline status."""
