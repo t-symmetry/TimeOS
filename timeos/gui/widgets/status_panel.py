@@ -32,7 +32,7 @@ class StatusLED(QWidget):
         "UNKNOWN": "#5a5a5a",
     }
 
-    def __init__(self, label: str, parent: QWidget | None = None):
+    def __init__(self, label: str, tooltip: str = "", parent: QWidget | None = None):
         super().__init__(parent)
 
         layout = QHBoxLayout(self)
@@ -48,6 +48,8 @@ class StatusLED(QWidget):
         # Label
         self._label = QLabel(label)
         self._label.setStyleSheet("color: #e0e0e0;")
+        if tooltip:
+            self._label.setToolTip(tooltip)
         layout.addWidget(self._label)
 
         # Status text
@@ -91,11 +93,67 @@ class StatusPanel(QGroupBox):
         layout = QVBoxLayout(self)
         layout.setSpacing(4)
 
-        # Create LEDs for each module
-        modules = ["TDU", "Field", "Causality", "Anchor", "Safety"]
+        # Module definitions with tooltips
+        modules = {
+            "TDU": (
+                "<b>Temporal Displacement Unit</b><br><br>"
+                "The core component responsible for temporal displacement.<br><br>"
+                "Controls the spacetime manipulation field that enables<br>"
+                "movement through time.<br><br>"
+                "<b>Status meanings:</b><br>"
+                "• READY: System nominal, ready to displace<br>"
+                "• ACTIVE: Displacement in progress<br>"
+                "• CALIBRATING: Adjusting field parameters<br>"
+                "• ERROR: Displacement fault detected"
+            ),
+            "Field": (
+                "<b>Field Generator</b><br><br>"
+                "Generates the electromagnetic field required for<br>"
+                "T-symmetry manipulation.<br><br>"
+                "The field creates a localized region where the<br>"
+                "arrow of time can be controlled.<br><br>"
+                "<b>Key parameters:</b><br>"
+                "• Field strength (Tesla)<br>"
+                "• T-symmetry factor<br>"
+                "• Power consumption (Watts)"
+            ),
+            "Causality": (
+                "<b>Causality Monitor</b><br><br>"
+                "Monitors timeline consistency and detects paradoxes.<br><br>"
+                "Enforces causal constraints:<br>"
+                "• No self-causation (causal loops)<br>"
+                "• Effects cannot precede causes<br>"
+                "• Relativistic causality (light cone)<br><br>"
+                "<b>Status meanings:</b><br>"
+                "• NOMINAL: All constraints satisfied<br>"
+                "• WARNING: Elevated paradox risk<br>"
+                "• ERROR: Causality violation detected"
+            ),
+            "Anchor": (
+                "<b>Temporal Anchor</b><br><br>"
+                "Maintains a stable reference point in spacetime.<br><br>"
+                "The anchor is your 'home' - a fixed point you can<br>"
+                "return to safely regardless of timeline changes.<br><br>"
+                "<b>Functions:</b><br>"
+                "• Provides return coordinates<br>"
+                "• Measures temporal displacement<br>"
+                "• Emergency recovery point"
+            ),
+            "Safety": (
+                "<b>Safety Interlock System</b><br><br>"
+                "Monitors for dangerous conditions and can halt<br>"
+                "operations automatically.<br><br>"
+                "<b>Triggers include:</b><br>"
+                "• Paradox risk > 30%<br>"
+                "• Causality violation detected<br>"
+                "• Field instability<br>"
+                "• Manual E-STOP activation<br><br>"
+                "When triggered, all temporal operations stop immediately."
+            ),
+        }
 
-        for module in modules:
-            led = StatusLED(module)
+        for module, tooltip in modules.items():
+            led = StatusLED(module, tooltip)
             self._leds[module] = led
             layout.addWidget(led)
 
