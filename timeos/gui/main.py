@@ -146,6 +146,31 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
+        # Scenarios submenu
+        scenarios_menu = file_menu.addMenu("&Load Scenario")
+
+        browse_scenarios_action = QAction("&Browse Scenarios...", self)
+        browse_scenarios_action.setShortcut(QKeySequence("Ctrl+L"))
+        browse_scenarios_action.triggered.connect(self._on_browse_scenarios)
+        scenarios_menu.addAction(browse_scenarios_action)
+
+        scenarios_menu.addSeparator()
+
+        # Quick access to common scenarios
+        quick_scenarios = [
+            ("simple_timeline", "Simple Timeline"),
+            ("branching", "Timeline Branching"),
+            ("causal_chain", "Causal Chain"),
+            ("low_risk", "Low Risk Demo"),
+        ]
+        for name, title in quick_scenarios:
+            action = QAction(title, self)
+            action.setData(name)
+            action.triggered.connect(lambda checked, n=name: self._on_quick_scenario(n))
+            scenarios_menu.addAction(action)
+
+        file_menu.addSeparator()
+
         export_action = QAction("&Export Log...", self)
         export_action.setShortcut(QKeySequence("Ctrl+E"))
         export_action.triggered.connect(self._on_export_log)
@@ -328,6 +353,56 @@ class MainWindow(QMainWindow):
         )
         if path:
             self._model.export_log(path)
+
+    def _on_browse_scenarios(self) -> None:
+        """Open scenario browser dialog."""
+        from timeos.gui.dialogs.scenario_browser import ScenarioBrowserDialog
+
+        dialog = ScenarioBrowserDialog(self)
+        dialog.scenario_selected.connect(self._load_scenario)
+        dialog.exec()
+
+    def _on_quick_scenario(self, name: str) -> None:
+        """Load a scenario by name."""
+        self._load_scenario(name)
+
+    def _load_scenario(self, name: str) -> None:
+        """Load a scenario into the model."""
+        try:
+            from timeos.paradoxes import get_scenario
+
+            scenario = get_scenario(name)
+            if not scenario:
+                QMessageBox.warning(self, "Error", f"Unknown scenario: {name}")
+                return
+
+            # Confirm if there are existing events
+            if self._model.get_timeline_events():
+                reply = QMessageBox.question(
+                    self,
+                    "Load Scenario",
+                    f"Load '{scenario.title}'?\n\nThis will add events to the current timeline.",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                )
+                if reply != QMessageBox.StandardButton.Yes:
+                    return
+
+            # Load scenario into model's timeline
+            event_map = self._model.load_scenario(scenario)
+
+            QMessageBox.information(
+                self,
+                "Scenario Loaded",
+                f"Loaded '{scenario.title}':\n"
+                f"  {len(event_map)} events created\n"
+                f"  Branches: {', '.join(scenario.branches) if scenario.branches else 'none'}",
+            )
+
+            # Refresh displays
+            self._on_refresh()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load scenario: {e}")
 
     def _on_displace(self) -> None:
         """Open displacement dialog."""

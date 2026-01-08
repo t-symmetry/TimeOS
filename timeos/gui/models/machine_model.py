@@ -513,6 +513,33 @@ class MachineModel(QObject):
             json.dump(self._event_log, f, indent=2, default=str)
         self._log_event(f"Log exported to {path}")
 
+    def load_scenario(self, scenario) -> dict:
+        """Load a pre-built scenario into the timeline.
+
+        Args:
+            scenario: A Scenario object from timeos.paradoxes.
+
+        Returns:
+            Dictionary mapping event names to created events.
+        """
+        if not self._machine:
+            raise RuntimeError("Machine not initialized")
+
+        from timeos.msgs import TimelineEvent
+
+        timeline = self._machine.timeline
+        event_map = scenario.load(timeline)
+
+        # Log the scenario load
+        self._log_event(f"Loaded scenario: {scenario.title}")
+        for event_name, event in event_map.items():
+            self._log_event(f"  Created: {event_name} (t={event.stamp.t:.1f})")
+
+        self.state_changed.emit()
+
+        # Return mapping for GUI feedback
+        return event_map
+
     def _log_event(
         self,
         message: str,
