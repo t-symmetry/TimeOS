@@ -318,5 +318,88 @@ def status(ctx: click.Context) -> None:
     timeline.log.close()
 
 
+@cli.group()
+def paradox() -> None:
+    """Run paradox demonstrations (educational)."""
+    pass
+
+
+@paradox.command("list")
+def paradox_list() -> None:
+    """List available paradox demonstrations."""
+    click.echo("Available paradox demonstrations:")
+    click.echo("")
+    click.echo("  grandfather    - The Grandfather Paradox")
+    click.echo("                   Attempting to prevent your own existence")
+    click.echo("")
+    click.echo("  bootstrap      - The Bootstrap Paradox")
+    click.echo("                   Information that exists without origin")
+    click.echo("")
+    click.echo("  predestination - The Predestination Paradox")
+    click.echo("                   Actions that cause what they tried to prevent")
+    click.echo("")
+    click.echo("  observer       - The Observer Paradox")
+    click.echo("                   Observation changes the observed")
+    click.echo("")
+    click.echo("Run 'timeos paradox run <name>' to execute a demonstration.")
+    click.echo("Run 'timeos paradox run all' to run all demonstrations.")
+
+
+@paradox.command("run")
+@click.argument("name")
+@click.option("--quiet", "-q", is_flag=True, help="Minimal output.")
+def paradox_run(name: str, quiet: bool) -> None:
+    """Run a paradox demonstration.
+
+    NAME can be: grandfather, bootstrap, predestination, observer, or 'all'.
+    """
+    try:
+        from timeos.paradoxes import (
+            GrandfatherParadox,
+            BootstrapParadox,
+            PredestinationParadox,
+            ObserverParadox,
+            run_all_demos,
+        )
+    except ImportError as e:
+        click.echo(f"Error loading paradox module: {e}")
+        sys.exit(1)
+
+    demos = {
+        "grandfather": GrandfatherParadox,
+        "bootstrap": BootstrapParadox,
+        "predestination": PredestinationParadox,
+        "observer": ObserverParadox,
+    }
+
+    if name == "all":
+        click.echo("Running all paradox demonstrations...")
+        click.echo("")
+        results = run_all_demos(verbose=not quiet)
+
+        # Summary
+        prevented = sum(1 for r in results if r.prevented)
+        detected = sum(1 for r in results if r.detected)
+        click.echo(f"\nTotal: {len(results)} demos, {detected} detected, {prevented} prevented")
+
+    elif name in demos:
+        click.echo(f"Running: {name.title()} Paradox")
+        click.echo("")
+
+        demo = demos[name]()
+        result = demo.run()
+
+        if quiet:
+            status = "PREVENTED" if result.prevented else ("DETECTED" if result.detected else "ALLOWED")
+            click.echo(f"Result: {status} (Risk: {result.risk_level*100:.1f}%)")
+        else:
+            click.echo(result.format_report())
+
+    else:
+        click.echo(f"Unknown paradox: {name}")
+        click.echo("Available: grandfather, bootstrap, predestination, observer, all")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     cli()
