@@ -401,5 +401,134 @@ def paradox_run(name: str, quiet: bool) -> None:
         sys.exit(1)
 
 
+@cli.group()
+def scenario() -> None:
+    """Load pre-built demo scenarios."""
+    pass
+
+
+@scenario.command("list")
+@click.option("--category", "-c", help="Filter by category.")
+def scenario_list(category: str | None) -> None:
+    """List available demo scenarios."""
+    try:
+        from timeos.paradoxes import (
+            list_scenarios,
+            ScenarioCategory,
+            SCENARIOS_BY_CATEGORY,
+        )
+    except ImportError as e:
+        click.echo(f"Error loading scenarios: {e}")
+        sys.exit(1)
+
+    if category:
+        try:
+            cat = ScenarioCategory(category.lower())
+            scenarios = list_scenarios(cat)
+        except ValueError:
+            click.echo(f"Unknown category: {category}")
+            click.echo(f"Available: {', '.join(c.value for c in ScenarioCategory)}")
+            sys.exit(1)
+    else:
+        scenarios = list_scenarios()
+
+    click.echo("Available demo scenarios:")
+    click.echo("")
+
+    current_cat = None
+    for s in scenarios:
+        if s.category != current_cat:
+            current_cat = s.category
+            click.echo(f"  [{current_cat.value.upper()}]")
+
+        risk_str = f" (expected risk: {s.expected_risk*100:.0f}%)" if s.expected_risk else ""
+        click.echo(f"    {s.name:<20} - {s.title}{risk_str}")
+
+    click.echo("")
+    click.echo("Run 'timeos scenario load <name>' to load a scenario.")
+    click.echo("Run 'timeos scenario info <name>' for details.")
+
+
+@scenario.command("info")
+@click.argument("name")
+def scenario_info(name: str) -> None:
+    """Show detailed information about a scenario."""
+    try:
+        from timeos.paradoxes import get_scenario
+    except ImportError as e:
+        click.echo(f"Error loading scenarios: {e}")
+        sys.exit(1)
+
+    s = get_scenario(name)
+    if not s:
+        click.echo(f"Unknown scenario: {name}")
+        sys.exit(1)
+
+    click.echo(f"Scenario: {s.title}")
+    click.echo(f"Category: {s.category.value}")
+    click.echo("")
+    click.echo(f"Description:")
+    click.echo(f"  {s.description}")
+    click.echo("")
+
+    if s.learning_objectives:
+        click.echo("Learning Objectives:")
+        for obj in s.learning_objectives:
+            click.echo(f"  • {obj}")
+        click.echo("")
+
+    click.echo(f"Events: {len(s.events)}")
+    for event in s.events:
+        parent_str = f" (parents: {', '.join(event.parent_names)})" if event.parent_names else ""
+        branch_str = f" [{event.branch_id}]" if event.branch_id != "main" else ""
+        click.echo(f"  t={event.t:>5.1f}: {event.name}{branch_str}{parent_str}")
+
+    if s.branches:
+        click.echo(f"\nBranches: {', '.join(s.branches)}")
+
+    if s.expected_risk:
+        click.echo(f"\nExpected Paradox Risk: {s.expected_risk*100:.0f}%")
+
+
+@scenario.command("load")
+@click.argument("name")
+@click.pass_context
+def scenario_load(ctx: click.Context, name: str) -> None:
+    """Load a scenario into the timeline database."""
+    try:
+        from timeos.paradoxes import get_scenario
+    except ImportError as e:
+        click.echo(f"Error loading scenarios: {e}")
+        sys.exit(1)
+
+    s = get_scenario(name)
+    if not s:
+        click.echo(f"Unknown scenario: {name}")
+        sys.exit(1)
+
+    db_path = ctx.obj["db"]
+
+    # Initialize if needed
+    if not Path(db_path).exists():
+        log = EventLog(db_path)
+        log.close()
+        click.echo(f"Initialized timeline database: {db_path}")
+
+    timeline = get_timeline(db_path)
+
+    click.echo(f"Loading scenario: {s.title}")
+    event_map = s.load(timeline)
+
+    click.echo(f"Created {len(event_map)} events:")
+    for event_name, event in event_map.items():
+        click.echo(f"  {event_name}: {event.event_id[:8]}... (t={event.stamp.t:.1f})")
+
+    if s.branches:
+        click.echo(f"Created branches: {', '.join(s.branches)}")
+
+    timeline.log.close()
+    click.echo(f"\nScenario loaded to: {db_path}")
+
+
 if __name__ == "__main__":
     cli()

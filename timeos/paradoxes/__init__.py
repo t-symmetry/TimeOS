@@ -16,6 +16,10 @@ Usage:
     demo = GrandfatherParadox()
     result = demo.run()
     print(result.explanation)
+
+    # Load a pre-built scenario
+    from timeos.paradoxes import load_scenario, list_scenarios
+    timeline, events = load_scenario("branching")
 """
 
 from timeos.paradoxes.scenarios import (
@@ -28,7 +32,20 @@ from timeos.paradoxes.scenarios import (
     run_all_demos,
 )
 
+from timeos.paradoxes.demo_scenarios import (
+    Scenario,
+    ScenarioCategory,
+    ScenarioEvent,
+    get_scenario,
+    list_scenarios,
+    load_scenario,
+    ALL_SCENARIOS,
+    SCENARIOS_BY_NAME,
+    SCENARIOS_BY_CATEGORY,
+)
+
 __all__ = [
+    # Paradox demos
     "ParadoxDemo",
     "ParadoxResult",
     "GrandfatherParadox",
@@ -36,4 +53,14 @@ __all__ = [
     "PredestinationParadox",
     "ObserverParadox",
     "run_all_demos",
+    # Scenarios
+    "Scenario",
+    "ScenarioCategory",
+    "ScenarioEvent",
+    "get_scenario",
+    "list_scenarios",
+    "load_scenario",
+    "ALL_SCENARIOS",
+    "SCENARIOS_BY_NAME",
+    "SCENARIOS_BY_CATEGORY",
 ]
