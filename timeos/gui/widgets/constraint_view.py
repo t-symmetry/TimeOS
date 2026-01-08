@@ -89,19 +89,19 @@ class ConstraintCard(QFrame):
 
         layout.addLayout(header)
 
-        # Message row
-        if self._check.message:
-            msg_label = QLabel(self._check.message)
+        # Details row (text)
+        if self._check.details:
+            msg_label = QLabel(self._check.details)
             msg_label.setStyleSheet("color: #a0a0a0; font-size: 11px;")
             msg_label.setWordWrap(True)
             layout.addWidget(msg_label)
 
-        # Details row (metrics)
-        if self._check.details:
-            details_text = " | ".join(f"{k}: {v}" for k, v in self._check.details.items())
-            details_label = QLabel(details_text)
-            details_label.setStyleSheet("color: #606060; font-size: 10px; font-family: monospace;")
-            layout.addWidget(details_label)
+        # Metrics row (key-value pairs)
+        if self._check.metrics:
+            metrics_text = " | ".join(f"{k}: {v}" for k, v in self._check.metrics.items())
+            metrics_label = QLabel(metrics_text)
+            metrics_label.setStyleSheet("color: #606060; font-size: 10px; font-family: monospace;")
+            layout.addWidget(metrics_label)
 
         # Expandable explanation
         self._explanation_label = QLabel()
@@ -181,7 +181,7 @@ class ConstraintCard(QFrame):
                 return
 
         # Default tooltip
-        self.setToolTip(f"<b>{self._check.constraint_name}</b><br><br>{self._check.message or 'No details available.'}")
+        self.setToolTip(f"<b>{self._check.constraint_name}</b><br><br>{self._check.details or 'No details available.'}")
 
     def mousePressEvent(self, event) -> None:
         """Handle click to toggle expansion."""

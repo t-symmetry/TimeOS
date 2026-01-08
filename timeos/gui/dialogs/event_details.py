@@ -258,33 +258,38 @@ class EventDetailsDialog(QDialog):
         checks = [
             ConstraintCheck(
                 constraint_name="No self-parent",
+                description="No self-causation constraint",
                 status=ConstraintStatus.SATISFIED,
-                message=f"Checked {len(parents)} ancestors" if parents else "No parents to check",
-                details={"ancestors_checked": len(parents)},
+                details=f"Checked {len(parents)} ancestors" if parents else "No parents to check",
+                metrics={"ancestors_checked": len(parents)},
             ),
             ConstraintCheck(
                 constraint_name="Causal ordering",
+                description="Causes precede effects",
                 status=ConstraintStatus.SATISFIED,
-                message=f"Δt = +{event_t:.3f}s" if event_t > 0 else "Root event",
-                details={"delta_t": event_t},
+                details=f"Δt = +{event_t:.3f}s" if event_t > 0 else "Root event",
+                metrics={"delta_t": event_t},
             ),
             ConstraintCheck(
                 constraint_name="Light-cone ordering",
+                description="Relativistic causality",
                 status=ConstraintStatus.SATISFIED,
-                message=f"Timelike (Δt = +{event_t:.3f}s)" if event_t > 0 else "At apex",
-                details={"interval_type": "timelike", "delta_t": event_t},
+                details=f"Timelike (Δt = +{event_t:.3f}s)" if event_t > 0 else "At apex",
+                metrics={"interval_type": "timelike", "delta_t": event_t},
             ),
             ConstraintCheck(
                 constraint_name="Branch coherence",
+                description="Timeline branch consistency",
                 status=ConstraintStatus.SATISFIED,
-                message=f"Branch '{branch}' consistent",
-                details={"branch": branch},
+                details=f"Branch '{branch}' consistent",
+                metrics={"branch": branch},
             ),
             ConstraintCheck(
                 constraint_name="Conservation (soft)",
+                description="Energy/momentum conservation",
                 status=ConstraintStatus.DEFERRED,
-                message="Deferred (no conservation data)",
-                details={},
+                details="Deferred (no conservation data)",
+                metrics={},
             ),
         ]
         return checks
@@ -301,18 +306,18 @@ class EventDetailsDialog(QDialog):
             ConstraintStatus.DEFERRED: "DEFERRED",
         }.get(check.status, "UNKNOWN")
 
-        details_text = ""
-        if check.details:
-            details_text = "\n".join(f"  {k}: {v}" for k, v in check.details.items())
+        metrics_text = ""
+        if check.metrics:
+            metrics_text = "\n".join(f"  {k}: {v}" for k, v in check.metrics.items())
 
         msg = QMessageBox(self)
         msg.setWindowTitle(f"Constraint: {check.constraint_name}")
         msg.setText(f"<b>{check.constraint_name}</b><br><br>"
                    f"Status: <b>{status_text}</b><br><br>"
-                   f"{check.message}")
+                   f"{check.details}")
 
-        if details_text:
-            msg.setDetailedText(f"Details:\n{details_text}")
+        if metrics_text:
+            msg.setDetailedText(f"Metrics:\n{metrics_text}")
 
         msg.setIcon(QMessageBox.Icon.Information)
         msg.exec()
