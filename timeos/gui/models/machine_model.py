@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import random
 from datetime import datetime
 from typing import Any
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QTimer
 
 from timeos.hardware.drivers.simulated import SimulatedTimeMachine
 from timeos.hardware.timeline_navigator import NavigationTarget
@@ -28,12 +29,15 @@ class MachineModel(QObject):
     displacement_completed = Signal(bool)  # success
     error_occurred = Signal(str)
 
-    def __init__(self, parent: QObject | None = None):
+    def __init__(self, demo: bool = False, parent: QObject | None = None):
         super().__init__(parent)
 
         self._machine: SimulatedTimeMachine | None = None
         self._event_log: list[dict] = []
         self._initialized = False
+        self._demo = demo
+        self._demo_timer: QTimer | None = None
+        self._demo_time = 0.0
 
     def initialize(self) -> bool:
         """Initialize the time machine.
@@ -53,6 +57,10 @@ class MachineModel(QObject):
                 self._machine.set_anchor()
                 self._log_event("Anchor point established")
 
+                # Start demo mode if enabled
+                if self._demo:
+                    self._start_demo()
+
             self.state_changed.emit()
             return success
 
@@ -60,8 +68,51 @@ class MachineModel(QObject):
             self.error_occurred.emit(str(e))
             return False
 
+    def _start_demo(self) -> None:
+        """Start demo mode simulation."""
+        self._log_event("Demo mode activated")
+        self._demo_time = 0.0
+
+        # Generate some initial demo events
+        demo_events = [
+            "Calibration sequence initiated",
+            "Temporal field stabilized",
+            "Causality monitor online",
+            "Ready for operations",
+        ]
+        for msg in demo_events:
+            self._log_event(msg)
+
+        # Start demo timer for periodic updates
+        self._demo_timer = QTimer(self)
+        self._demo_timer.timeout.connect(self._demo_tick)
+        self._demo_timer.start(2000)  # Update every 2 seconds
+
+    def _demo_tick(self) -> None:
+        """Demo mode periodic update."""
+        self._demo_time += 0.1
+
+        # Randomly generate events
+        if random.random() < 0.3:
+            demo_messages = [
+                "Temporal flux detected",
+                "Field strength nominal",
+                "Causality check passed",
+                "Timeline stable",
+                "Anchor signal strong",
+                "Minor quantum fluctuation",
+                "Synchronization complete",
+            ]
+            self._log_event(random.choice(demo_messages))
+
+        self.state_changed.emit()
+
     def shutdown(self) -> None:
         """Shutdown the time machine."""
+        if self._demo_timer:
+            self._demo_timer.stop()
+            self._demo_timer = None
+
         if self._machine:
             self._machine.shutdown()
             self._initialized = False

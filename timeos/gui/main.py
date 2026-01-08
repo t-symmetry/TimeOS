@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
 )
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QSettings, QByteArray
 from PySide6.QtGui import QAction, QKeySequence
 
 from timeos.gui.widgets.status_panel import StatusPanel
@@ -34,13 +34,14 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
 
         self._demo = demo
-        self._model = MachineModel()
+        self._model = MachineModel(demo=demo)
 
         self._setup_ui()
         self._setup_menu()
         self._setup_statusbar()
         self._connect_signals()
         self._start_update_timer()
+        self._restore_settings()
 
         # Initialize the machine
         self._model.initialize()
@@ -226,6 +227,8 @@ class MainWindow(QMainWindow):
         self._control_panel.return_requested.connect(self._on_return)
         self._control_panel.estop_requested.connect(self._on_emergency_stop)
 
+        self._timeline_view.event_selected.connect(self._on_event_selected)
+
         self._model.state_changed.connect(self._on_state_changed)
         self._model.event_logged.connect(self._on_event_logged)
 
@@ -278,6 +281,13 @@ class MainWindow(QMainWindow):
     def _on_event_logged(self, event: dict) -> None:
         """Handle new event from model."""
         pass  # Event log widget handles this
+
+    def _on_event_selected(self, event: dict) -> None:
+        """Handle event selection from timeline."""
+        from timeos.gui.dialogs.event_details import EventDetailsDialog
+
+        dialog = EventDetailsDialog(event, self)
+        dialog.exec()
 
     def _on_new_session(self) -> None:
         """Start a new session."""
@@ -344,6 +354,7 @@ class MainWindow(QMainWindow):
     def _on_reset_layout(self) -> None:
         """Reset window layout."""
         self.resize(1400, 900)
+        self.move(100, 100)
 
     def _on_about(self) -> None:
         """Show about dialog."""
@@ -357,8 +368,25 @@ class MainWindow(QMainWindow):
             "<p>Licensed under Apache 2.0</p>",
         )
 
+    def _save_settings(self) -> None:
+        """Save window state to settings."""
+        settings = QSettings("T-Symmetry Labs", "TimeOS Control")
+        settings.setValue("geometry", self.saveGeometry())
+        settings.setValue("windowState", self.saveState())
+
+    def _restore_settings(self) -> None:
+        """Restore window state from settings."""
+        settings = QSettings("T-Symmetry Labs", "TimeOS Control")
+        geometry = settings.value("geometry")
+        if geometry:
+            self.restoreGeometry(geometry)
+        state = settings.value("windowState")
+        if state:
+            self.restoreState(state)
+
     def closeEvent(self, event) -> None:
         """Handle window close."""
+        self._save_settings()
         self._update_timer.stop()
         self._model.shutdown()
         event.accept()

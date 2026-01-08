@@ -2,22 +2,29 @@
 
 from __future__ import annotations
 
+import pyqtgraph as pg
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
     QGroupBox,
-    QFrame,
+    QPushButton,
 )
-from PySide6.QtCore import Qt, QRectF, QPointF
-from PySide6.QtGui import QPainter, QPen, QBrush, QColor, QFont
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor, QFont
 
 from timeos.gui.models.machine_model import MachineModel
 
 
-class TimelineCanvas(QWidget):
-    """Canvas widget for drawing the timeline."""
+# Configure pyqtgraph for dark theme
+pg.setConfigOptions(antialias=True, background='#0d0d0d', foreground='#808080')
+
+
+class TimelinePlot(pg.PlotWidget):
+    """PyQtGraph-based timeline visualization."""
+
+    event_clicked = Signal(dict)  # Emitted when an event is clicked
 
     def __init__(self, model: MachineModel, parent: QWidget | None = None):
         super().__init__(parent)
@@ -25,153 +32,134 @@ class TimelineCanvas(QWidget):
         self._model = model
         self._events: list[dict] = []
         self._current_time = 0.0
-        self._anchor_time = 0.0
-        self._view_start = -10.0
-        self._view_end = 10.0
+        self._anchor_time: float | None = 0.0
 
-        self.setMinimumHeight(120)
-        self.setStyleSheet("background-color: #0d0d0d;")
+        self._setup_plot()
+        self._create_items()
 
-    def set_events(self, events: list[dict]) -> None:
-        """Set events to display."""
-        self._events = events
-        self.update()
+    def _setup_plot(self) -> None:
+        """Configure the plot appearance."""
+        self.setMinimumHeight(150)
+        self.setMouseEnabled(x=True, y=False)
+        self.setMenuEnabled(False)
+
+        # Configure axes
+        self.setLabel('bottom', 't', units='s')
+        self.showGrid(x=True, y=False, alpha=0.3)
+
+        # Hide y-axis (timeline is 1D)
+        self.getAxis('left').hide()
+        self.setYRange(-1, 1)
+
+        # Style the plot
+        self.getAxis('bottom').setPen(pg.mkPen('#3a3a3a', width=1))
+        self.getAxis('bottom').setTextPen('#808080')
+
+    def _create_items(self) -> None:
+        """Create plot items for timeline elements."""
+        # Timeline axis line
+        self._axis_line = pg.InfiniteLine(
+            pos=0, angle=0, pen=pg.mkPen('#3a3a3a', width=2)
+        )
+        self.addItem(self._axis_line)
+
+        # Anchor marker (vertical line + diamond)
+        self._anchor_line = pg.InfiniteLine(
+            pos=0, angle=90, pen=pg.mkPen('#00aaff', width=1, style=Qt.PenStyle.DashLine)
+        )
+        self._anchor_line.setVisible(False)
+        self.addItem(self._anchor_line)
+
+        self._anchor_marker = pg.ScatterPlotItem(
+            size=16, symbol='d', pen=pg.mkPen('#00aaff', width=2),
+            brush=pg.mkBrush('#00aaff')
+        )
+        self.addItem(self._anchor_marker)
+
+        # Current position marker (glowing circle)
+        self._current_glow = pg.ScatterPlotItem(
+            size=30, symbol='o', pen=None,
+            brush=pg.mkBrush(0, 255, 136, 50)
+        )
+        self.addItem(self._current_glow)
+
+        self._current_marker = pg.ScatterPlotItem(
+            size=16, symbol='o', pen=pg.mkPen('#00ff88', width=2),
+            brush=pg.mkBrush('#00ff88')
+        )
+        self.addItem(self._current_marker)
+
+        # Event markers
+        self._event_markers = pg.ScatterPlotItem(
+            size=10, symbol='o', pen=pg.mkPen('#808080', width=1),
+            brush=pg.mkBrush('#404040'), hoverable=True
+        )
+        self._event_markers.sigClicked.connect(self._on_event_clicked)
+        self.addItem(self._event_markers)
+
+        # Labels
+        self._anchor_label = pg.TextItem("ANCHOR", color='#00aaff', anchor=(0.5, 1.5))
+        self._anchor_label.setFont(QFont("Monospace", 8))
+        self.addItem(self._anchor_label)
+
+        self._current_label = pg.TextItem("NOW", color='#00ff88', anchor=(0.5, 1.5))
+        self._current_label.setFont(QFont("Monospace", 8))
+        self.addItem(self._current_label)
 
     def set_current_time(self, t: float) -> None:
-        """Set current time marker."""
+        """Update current time marker."""
         self._current_time = t
-        self.update()
+        self._current_marker.setData([t], [0])
+        self._current_glow.setData([t], [0])
+        self._current_label.setPos(t, 0.3)
 
     def set_anchor_time(self, t: float | None) -> None:
-        """Set anchor time marker."""
-        self._anchor_time = t if t is not None else 0.0
-        self.update()
+        """Update anchor marker."""
+        self._anchor_time = t
+        if t is not None:
+            self._anchor_line.setPos(t)
+            self._anchor_line.setVisible(True)
+            self._anchor_marker.setData([t], [0])
+            self._anchor_label.setPos(t, 0.3)
+            self._anchor_label.setVisible(True)
+        else:
+            self._anchor_line.setVisible(False)
+            self._anchor_marker.setData([], [])
+            self._anchor_label.setVisible(False)
+
+    def set_events(self, events: list[dict]) -> None:
+        """Update event markers."""
+        self._events = events
+        if events:
+            times = [e.get("time", 0.0) for e in events]
+            ys = [0] * len(times)
+            self._event_markers.setData(times, ys)
+        else:
+            self._event_markers.setData([], [])
 
     def set_view_range(self, start: float, end: float) -> None:
-        """Set the visible time range."""
-        self._view_start = start
-        self._view_end = end
-        self.update()
+        """Set visible time range."""
+        self.setXRange(start, end, padding=0.05)
 
-    def paintEvent(self, event) -> None:
-        """Paint the timeline."""
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        w = self.width()
-        h = self.height()
-        margin = 40
-        timeline_y = h // 2
-
-        # Background
-        painter.fillRect(0, 0, w, h, QColor("#0d0d0d"))
-
-        # Timeline axis
-        pen = QPen(QColor("#3a3a3a"), 2)
-        painter.setPen(pen)
-        painter.drawLine(margin, timeline_y, w - margin, timeline_y)
-
-        # Arrow at end
-        arrow_x = w - margin
-        painter.drawLine(arrow_x, timeline_y, arrow_x - 10, timeline_y - 5)
-        painter.drawLine(arrow_x, timeline_y, arrow_x - 10, timeline_y + 5)
-
-        # Time labels and ticks
-        painter.setPen(QPen(QColor("#5a5a5a"), 1))
-        font = QFont("Monospace", 8)
-        painter.setFont(font)
-
-        time_range = self._view_end - self._view_start
-        if time_range <= 0:
-            time_range = 20.0
-
-        # Draw ticks
-        tick_count = 10
-        for i in range(tick_count + 1):
-            t = self._view_start + (time_range * i / tick_count)
-            x = margin + ((t - self._view_start) / time_range) * (w - 2 * margin)
-
-            # Tick
-            painter.drawLine(int(x), timeline_y - 5, int(x), timeline_y + 5)
-
-            # Label
-            label = f"{t:.1f}"
-            painter.drawText(int(x) - 15, timeline_y + 20, label)
-
-        # Anchor marker (diamond)
-        if self._anchor_time is not None:
-            anchor_x = margin + (
-                (self._anchor_time - self._view_start) / time_range
-            ) * (w - 2 * margin)
-
-            if margin <= anchor_x <= w - margin:
-                painter.setPen(QPen(QColor("#00aaff"), 2))
-                painter.setBrush(QBrush(QColor("#00aaff")))
-
-                # Diamond shape
-                points = [
-                    QPointF(anchor_x, timeline_y - 12),
-                    QPointF(anchor_x + 8, timeline_y),
-                    QPointF(anchor_x, timeline_y + 12),
-                    QPointF(anchor_x - 8, timeline_y),
-                ]
-                painter.drawPolygon(points)
-
-                # Label
-                painter.setPen(QPen(QColor("#00aaff"), 1))
-                painter.drawText(int(anchor_x) - 20, timeline_y - 20, "ANCHOR")
-
-        # Current position marker (circle with glow)
-        current_x = margin + (
-            (self._current_time - self._view_start) / time_range
-        ) * (w - 2 * margin)
-
-        if margin <= current_x <= w - margin:
-            # Glow effect
-            for i in range(3, 0, -1):
-                alpha = 50 - i * 15
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(QBrush(QColor(0, 255, 136, alpha)))
-                painter.drawEllipse(
-                    QPointF(current_x, timeline_y),
-                    8 + i * 3,
-                    8 + i * 3,
-                )
-
-            # Main marker
-            painter.setPen(QPen(QColor("#00ff88"), 2))
-            painter.setBrush(QBrush(QColor("#00ff88")))
-            painter.drawEllipse(QPointF(current_x, timeline_y), 8, 8)
-
-            # Label
-            painter.setPen(QPen(QColor("#00ff88"), 1))
-            painter.drawText(int(current_x) - 10, timeline_y - 20, "NOW")
-
-        # Draw events as small circles on the timeline
-        painter.setPen(QPen(QColor("#808080"), 1))
-        painter.setBrush(QBrush(QColor("#404040")))
-
-        for evt in self._events:
-            evt_time = evt.get("time", 0.0)
-            evt_x = margin + (
-                (evt_time - self._view_start) / time_range
-            ) * (w - 2 * margin)
-
-            if margin <= evt_x <= w - margin:
-                painter.drawEllipse(QPointF(evt_x, timeline_y), 5, 5)
-
-        # "t" label
-        painter.setPen(QPen(QColor("#808080"), 1))
-        painter.drawText(w - margin + 5, timeline_y + 5, "t")
+    def _on_event_clicked(self, plot, points) -> None:
+        """Handle click on event marker."""
+        if points and self._events:
+            # Find the clicked event
+            idx = points[0].index()
+            if 0 <= idx < len(self._events):
+                self.event_clicked.emit(self._events[idx])
 
 
 class TimelineView(QGroupBox):
-    """Timeline visualization widget."""
+    """Timeline visualization widget with controls."""
+
+    event_selected = Signal(dict)  # Emitted when user selects an event
 
     def __init__(self, model: MachineModel, parent: QWidget | None = None):
         super().__init__("TIMELINE", parent)
 
         self._model = model
+        self._auto_follow = True
         self._setup_ui()
         self._connect_signals()
 
@@ -179,46 +167,129 @@ class TimelineView(QGroupBox):
         """Set up the timeline UI."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
 
-        # Canvas
-        self._canvas = TimelineCanvas(self._model)
-        layout.addWidget(self._canvas)
+        # Plot widget
+        self._plot = TimelinePlot(self._model)
+        layout.addWidget(self._plot)
 
-        # Info bar
-        info_layout = QHBoxLayout()
+        # Control bar
+        control_layout = QHBoxLayout()
+        control_layout.setSpacing(8)
 
+        # Zoom controls
+        zoom_in_btn = QPushButton("+")
+        zoom_in_btn.setFixedSize(24, 24)
+        zoom_in_btn.setToolTip("Zoom in")
+        zoom_in_btn.clicked.connect(self._zoom_in)
+        control_layout.addWidget(zoom_in_btn)
+
+        zoom_out_btn = QPushButton("-")
+        zoom_out_btn.setFixedSize(24, 24)
+        zoom_out_btn.setToolTip("Zoom out")
+        zoom_out_btn.clicked.connect(self._zoom_out)
+        control_layout.addWidget(zoom_out_btn)
+
+        reset_btn = QPushButton("Reset")
+        reset_btn.setFixedSize(48, 24)
+        reset_btn.setToolTip("Reset view")
+        reset_btn.clicked.connect(self._reset_view)
+        control_layout.addWidget(reset_btn)
+
+        # Auto-follow toggle
+        self._follow_btn = QPushButton("Follow")
+        self._follow_btn.setFixedSize(48, 24)
+        self._follow_btn.setCheckable(True)
+        self._follow_btn.setChecked(True)
+        self._follow_btn.setToolTip("Auto-follow current time")
+        self._follow_btn.toggled.connect(self._toggle_follow)
+        control_layout.addWidget(self._follow_btn)
+
+        control_layout.addStretch()
+
+        # Info labels
         self._range_label = QLabel("View: -10.0s to +10.0s")
         self._range_label.setStyleSheet("color: #808080; font-size: 9pt;")
-        info_layout.addWidget(self._range_label)
-
-        info_layout.addStretch()
+        control_layout.addWidget(self._range_label)
 
         self._event_count = QLabel("Events: 0")
         self._event_count.setStyleSheet("color: #808080; font-size: 9pt;")
-        info_layout.addWidget(self._event_count)
+        control_layout.addWidget(self._event_count)
 
-        layout.addLayout(info_layout)
+        layout.addLayout(control_layout)
 
     def _connect_signals(self) -> None:
-        """Connect model signals."""
+        """Connect signals."""
         self._model.state_changed.connect(self._update_display)
+        self._model.event_logged.connect(self._on_new_event)
+        self._plot.event_clicked.connect(self._on_event_clicked)
 
     def _update_display(self) -> None:
-        """Update timeline from model."""
+        """Update timeline from model state."""
         state = self._model.get_state()
 
         current_time = state.get("current_time", 0.0)
         anchor_time = state.get("anchor_time")
 
-        self._canvas.set_current_time(current_time)
-        self._canvas.set_anchor_time(anchor_time)
+        self._plot.set_current_time(current_time)
+        self._plot.set_anchor_time(anchor_time)
 
-        # Auto-adjust view range based on current time
-        view_start = current_time - 10.0
-        view_end = current_time + 10.0
-        self._canvas.set_view_range(view_start, view_end)
-        self._range_label.setText(f"View: {view_start:.1f}s to {view_end:.1f}s")
+        # Auto-follow current time
+        if self._auto_follow:
+            view_start = current_time - 10.0
+            view_end = current_time + 10.0
+            self._plot.set_view_range(view_start, view_end)
+            self._range_label.setText(f"View: {view_start:.1f}s to {view_end:.1f}s")
 
-        # Update event count
+        # Update events
         events = self._model.get_events()
+        # Convert to timeline format with time field
+        timeline_events = []
+        for e in events:
+            evt = dict(e)
+            # Use timestamp if available, otherwise 0
+            if "timestamp" in e:
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(e["timestamp"])
+                    evt["time"] = dt.timestamp() % 1000  # Use fractional part for demo
+                except:
+                    evt["time"] = 0.0
+            timeline_events.append(evt)
+
+        self._plot.set_events(timeline_events)
         self._event_count.setText(f"Events: {len(events)}")
+
+    def _on_new_event(self, event: dict) -> None:
+        """Handle new event logged."""
+        self._update_display()
+
+    def _on_event_clicked(self, event: dict) -> None:
+        """Handle event marker click."""
+        self.event_selected.emit(event)
+
+    def _zoom_in(self) -> None:
+        """Zoom in on timeline."""
+        self._plot.getViewBox().scaleBy((0.5, 1))
+        self._auto_follow = False
+        self._follow_btn.setChecked(False)
+
+    def _zoom_out(self) -> None:
+        """Zoom out on timeline."""
+        self._plot.getViewBox().scaleBy((2, 1))
+        self._auto_follow = False
+        self._follow_btn.setChecked(False)
+
+    def _reset_view(self) -> None:
+        """Reset to default view."""
+        state = self._model.get_state()
+        current_time = state.get("current_time", 0.0)
+        self._plot.set_view_range(current_time - 10.0, current_time + 10.0)
+        self._auto_follow = True
+        self._follow_btn.setChecked(True)
+
+    def _toggle_follow(self, checked: bool) -> None:
+        """Toggle auto-follow mode."""
+        self._auto_follow = checked
+        if checked:
+            self._update_display()
