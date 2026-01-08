@@ -348,6 +348,54 @@ class MachineModel(QObject):
         """
         return list(self._event_log)
 
+    def get_branches(self) -> list[dict]:
+        """Get timeline branches.
+
+        Returns:
+            List of branch dictionaries with branch_id, parent_branch, fork_event_id.
+        """
+        if not self._machine:
+            return [{"branch_id": "main", "parent_branch": None, "fork_event_id": None, "event_count": 0}]
+
+        try:
+            branches = self._machine.timeline.list_branches()
+            return [
+                {
+                    "branch_id": b.branch_id,
+                    "parent_branch": b.parent_branch,
+                    "fork_event_id": b.fork_event_id,
+                    "event_count": b.event_count,
+                }
+                for b in branches
+            ]
+        except Exception:
+            return [{"branch_id": "main", "parent_branch": None, "fork_event_id": None, "event_count": 0}]
+
+    def get_timeline_events(self) -> list[dict]:
+        """Get timeline events (from actual timeline, not GUI log).
+
+        Returns:
+            List of timeline event dictionaries.
+        """
+        if not self._machine:
+            return []
+
+        try:
+            events = []
+            for branch in self._machine.timeline.list_branches():
+                for event in self._machine.timeline.slice(branch_id=branch.branch_id):
+                    events.append({
+                        "event_id": event.event_id,
+                        "time": event.stamp.t,
+                        "frame_id": event.stamp.frame_id,
+                        "event_type": event.event_type,
+                        "branch_id": event.branch_id,
+                        "parents": event.parents,
+                    })
+            return sorted(events, key=lambda e: e["time"])
+        except Exception:
+            return []
+
     def export_log(self, path: str) -> None:
         """Export event log to file.
 
