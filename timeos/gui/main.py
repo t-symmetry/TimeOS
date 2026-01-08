@@ -182,8 +182,23 @@ class MainWindow(QMainWindow):
         view_menu = menubar.addMenu("&View")
 
         reset_layout_action = QAction("&Reset Layout", self)
+        reset_layout_action.setShortcut(QKeySequence("Ctrl+0"))
         reset_layout_action.triggered.connect(self._on_reset_layout)
         view_menu.addAction(reset_layout_action)
+
+        refresh_action = QAction("Re&fresh", self)
+        refresh_action.setShortcut(QKeySequence("F5"))
+        refresh_action.triggered.connect(self._on_refresh)
+        view_menu.addAction(refresh_action)
+
+        view_menu.addSeparator()
+
+        fullscreen_action = QAction("&Fullscreen", self)
+        fullscreen_action.setShortcut(QKeySequence("F11"))
+        fullscreen_action.setCheckable(True)
+        fullscreen_action.triggered.connect(self._on_toggle_fullscreen)
+        view_menu.addAction(fullscreen_action)
+        self._fullscreen_action = fullscreen_action
 
         # Help menu
         help_menu = menubar.addMenu("&Help")
@@ -355,6 +370,21 @@ class MainWindow(QMainWindow):
         """Reset window layout."""
         self.resize(1400, 900)
         self.move(100, 100)
+        if self.isFullScreen():
+            self.showNormal()
+            self._fullscreen_action.setChecked(False)
+
+    def _on_refresh(self) -> None:
+        """Refresh all displays."""
+        self._model.state_changed.emit()
+        self._timeline_view._reset_view()
+
+    def _on_toggle_fullscreen(self, checked: bool) -> None:
+        """Toggle fullscreen mode."""
+        if checked:
+            self.showFullScreen()
+        else:
+            self.showNormal()
 
     def _on_about(self) -> None:
         """Show about dialog."""
@@ -383,6 +413,14 @@ class MainWindow(QMainWindow):
         state = settings.value("windowState")
         if state:
             self.restoreState(state)
+
+    def keyPressEvent(self, event) -> None:
+        """Handle key press events."""
+        # Escape key triggers emergency stop
+        if event.key() == Qt.Key.Key_Escape:
+            self._on_emergency_stop()
+        else:
+            super().keyPressEvent(event)
 
     def closeEvent(self, event) -> None:
         """Handle window close."""

@@ -72,6 +72,8 @@ class MachineModel(QObject):
         """Start demo mode simulation."""
         self._log_event("Demo mode activated")
         self._demo_time = 0.0
+        self._demo_tick_count = 0
+        self._demo_branches_created = False
 
         # Generate some initial demo events
         demo_events = [
@@ -83,6 +85,14 @@ class MachineModel(QObject):
         for msg in demo_events:
             self._log_event(msg)
 
+        # Create initial timeline events
+        if self._machine:
+            timeline = self._machine.timeline
+            timeline.set_author("demo")
+            for i, msg in enumerate(demo_events):
+                stamp = ChronoStamp(frame_id="origin", t=float(i) * 0.5)
+                timeline.create_event(stamp, event_type="system", payload=msg.encode())
+
         # Start demo timer for periodic updates
         self._demo_timer = QTimer(self)
         self._demo_timer.timeout.connect(self._demo_tick)
@@ -90,22 +100,93 @@ class MachineModel(QObject):
 
     def _demo_tick(self) -> None:
         """Demo mode periodic update."""
-        self._demo_time += 0.1
+        self._demo_time += 1.0
+        self._demo_tick_count += 1
+
+        # Create demo branches after a few ticks to show branch visualization
+        if not self._demo_branches_created and self._demo_tick_count >= 3 and self._machine:
+            self._create_demo_branches()
+            self._demo_branches_created = True
 
         # Randomly generate events
-        if random.random() < 0.3:
+        if random.random() < 0.4:
             demo_messages = [
-                "Temporal flux detected",
-                "Field strength nominal",
-                "Causality check passed",
-                "Timeline stable",
-                "Anchor signal strong",
-                "Minor quantum fluctuation",
-                "Synchronization complete",
+                ("Temporal flux detected", "observation"),
+                ("Field strength nominal", "status"),
+                ("Causality check passed", "verification"),
+                ("Timeline stable", "status"),
+                ("Anchor signal strong", "status"),
+                ("Minor quantum fluctuation", "anomaly"),
+                ("Synchronization complete", "system"),
             ]
-            self._log_event(random.choice(demo_messages))
+            msg, event_type = random.choice(demo_messages)
+            self._log_event(msg)
+
+            # Add to actual timeline
+            if self._machine:
+                timeline = self._machine.timeline
+                branches = timeline.list_branches()
+                # Randomly pick a branch
+                branch = random.choice(branches)
+                stamp = ChronoStamp(frame_id="origin", t=self._demo_time)
+                try:
+                    timeline.create_event(
+                        stamp,
+                        event_type=event_type,
+                        payload=msg.encode(),
+                        branch_id=branch.branch_id
+                    )
+                except Exception:
+                    pass  # Ignore errors in demo mode
 
         self.state_changed.emit()
+
+    def _create_demo_branches(self) -> None:
+        """Create demo branches to showcase branch visualization."""
+        if not self._machine:
+            return
+
+        timeline = self._machine.timeline
+        timeline.set_author("demo")
+
+        try:
+            # Get an event to fork from
+            events = list(timeline.slice(branch_id="main"))
+            if len(events) >= 2:
+                fork_event = events[1]
+
+                # Create first branch
+                timeline.branch("experiment-alpha", from_event=fork_event.event_id)
+                self._log_event("Branch 'experiment-alpha' created", "warning")
+
+                # Add some events to the new branch
+                for i in range(3):
+                    stamp = ChronoStamp(frame_id="origin", t=self._demo_time + i * 0.3)
+                    timeline.create_event(
+                        stamp,
+                        event_type="experiment",
+                        payload=f"Alpha experiment {i+1}".encode(),
+                        branch_id="experiment-alpha"
+                    )
+
+            # Create second branch from a different point
+            if len(events) >= 3:
+                fork_event2 = events[2]
+                timeline.branch("experiment-beta", from_event=fork_event2.event_id)
+                self._log_event("Branch 'experiment-beta' created", "warning")
+
+                # Add events to second branch
+                for i in range(2):
+                    stamp = ChronoStamp(frame_id="origin", t=self._demo_time + i * 0.4)
+                    timeline.create_event(
+                        stamp,
+                        event_type="experiment",
+                        payload=f"Beta experiment {i+1}".encode(),
+                        branch_id="experiment-beta"
+                    )
+
+        except Exception as e:
+            self._log_event(f"Demo branch creation: {e}", "error")
 
     def shutdown(self) -> None:
         """Shutdown the time machine."""
