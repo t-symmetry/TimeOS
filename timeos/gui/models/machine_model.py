@@ -91,29 +91,29 @@ class MachineModel(QObject):
         if not self._machine:
             return self._default_state()
 
-        tdu = self._machine._tdu
-        field = self._machine._field_generator
-        causality = self._machine._causality_monitor
-        anchor = self._machine._anchor
-        navigator = self._machine._navigator
-        safety = self._machine._safety
+        tdu = self._machine.tdu
+        field = self._machine.field_generator
+        causality = self._machine.causality_monitor
+        anchor = self._machine.anchor
+        navigator = self._machine.navigator
+        safety = self._machine.safety
 
         # Get module statuses
         tdu_status = tdu.status.value if tdu else "unknown"
         field_status = field.status.value if field else "unknown"
         causality_status = causality.status.value if causality else "unknown"
 
-        # Get current position
-        current_pos = tdu.current_position if tdu else None
+        # Get current position (from machine, not TDU)
+        current_pos = self._machine.current_position
 
         # Get field state
         field_state = field.get_field_state() if field else None
 
-        # Get causality analysis
-        causality_analysis = causality.analyze() if causality else None
+        # Get causality status
+        causality_status_obj = causality.get_status() if causality else None
 
         # Get anchor info
-        anchor_point = anchor.get_anchor() if anchor else None
+        anchor_point = anchor.primary_anchor if anchor else None
 
         return {
             # Module statuses
@@ -129,26 +129,26 @@ class MachineModel(QObject):
             "uncertainty": current_pos.t_uncertainty if current_pos else 0.0,
 
             # Field
-            "field_active": field_state.is_active if field_state else False,
-            "field_strength": field_state.field_strength if field_state else 0.0,
-            "field_symmetry": field_state.t_symmetry_factor if field_state else 0.0,
-            "power_consumption": field_state.power_consumption if field_state else 0.0,
+            "field_active": field_state.active if field_state else False,
+            "field_strength": field_state.actual_b_tesla if field_state else 0.0,
+            "field_symmetry": field_state.configuration.t_symmetry_factor if (field_state and field_state.configuration) else 0.0,
+            "power_consumption": field_state.power_watts if field_state else 0.0,
 
             # Causality
             "causality": "NOMINAL" if (
-                causality_analysis and causality_analysis.is_consistent
+                causality_status_obj and causality_status_obj.consistent
             ) else "WARNING",
-            "paradox_risk": causality_analysis.paradox_probability if causality_analysis else 0.0,
-            "causal_violations": causality_analysis.violations if causality_analysis else [],
+            "paradox_risk": causality_status_obj.paradox_risk if causality_status_obj else 0.0,
+            "causal_violations": [],  # Alerts tracked separately
 
             # Anchor
             "anchor_connected": anchor_point is not None,
-            "anchor_time": anchor_point.timestamp.t if anchor_point else None,
-            "anchor_strength": anchor.signal_strength if anchor else 0.0,
+            "anchor_time": anchor_point.stamp.t if anchor_point else None,
+            "anchor_strength": anchor_point.strength if anchor_point else 0.0,
 
             # Overall
             "initialized": self._initialized,
-            "is_displacing": tdu.is_displacing if tdu else False,
+            "is_displacing": tdu.is_displacing if hasattr(tdu, 'is_displacing') else False,
         }
 
     def _default_state(self) -> dict[str, Any]:
@@ -192,11 +192,11 @@ class MachineModel(QObject):
             }
 
         return {
-            "TDU": self._machine._tdu.status.value.upper(),
-            "Field": self._machine._field_generator.status.value.upper(),
-            "Causality": self._machine._causality_monitor.status.value.upper(),
-            "Anchor": self._machine._anchor.status.value.upper(),
-            "Safety": self._machine._safety.status.value.upper(),
+            "TDU": self._machine.tdu.status.value.upper(),
+            "Field": self._machine.field_generator.status.value.upper(),
+            "Causality": self._machine.causality_monitor.status.value.upper(),
+            "Anchor": self._machine.anchor.status.value.upper(),
+            "Safety": self._machine.safety.status.value.upper(),
         }
 
     def displace(self, target_time: float) -> bool:
