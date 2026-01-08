@@ -530,5 +530,109 @@ def scenario_load(ctx: click.Context, name: str) -> None:
     click.echo(f"\nScenario loaded to: {db_path}")
 
 
+@cli.group()
+def learn() -> None:
+    """Educational walkthroughs and tutorials."""
+    pass
+
+
+@learn.command("list")
+def learn_list() -> None:
+    """List available walkthroughs."""
+    try:
+        from timeos.paradoxes import list_walkthroughs
+    except ImportError as e:
+        click.echo(f"Error loading walkthroughs: {e}")
+        sys.exit(1)
+
+    walkthroughs = list_walkthroughs()
+
+    click.echo("Available walkthroughs:")
+    click.echo("")
+
+    difficulty_icons = {"beginner": "🟢", "intermediate": "🟡", "advanced": "🔴"}
+
+    for w in walkthroughs:
+        icon = difficulty_icons.get(w.difficulty, "⚪")
+        prereq_str = f" (requires: {', '.join(w.prerequisites)})" if w.prerequisites else ""
+        click.echo(f"  {icon} {w.scenario_name:<20} - {w.title}")
+        click.echo(f"     {w.difficulty.capitalize()}, ~{w.estimated_time}{prereq_str}")
+        click.echo("")
+
+    click.echo("Run 'timeos learn show <name>' to view a walkthrough.")
+
+
+@learn.command("show")
+@click.argument("name")
+@click.option("--step", "-s", type=int, help="Start at specific step (1-based).")
+def learn_show(name: str, step: int | None) -> None:
+    """Show a walkthrough in the terminal."""
+    try:
+        from timeos.paradoxes import get_walkthrough
+    except ImportError as e:
+        click.echo(f"Error loading walkthroughs: {e}")
+        sys.exit(1)
+
+    w = get_walkthrough(name)
+    if not w:
+        click.echo(f"Unknown walkthrough: {name}")
+        click.echo("Run 'timeos learn list' to see available walkthroughs.")
+        sys.exit(1)
+
+    # Header
+    click.echo("")
+    click.echo("=" * 60)
+    click.echo(f"WALKTHROUGH: {w.title.upper()}")
+    click.echo("=" * 60)
+    click.echo("")
+    click.echo(f"Difficulty: {w.difficulty.capitalize()}")
+    click.echo(f"Estimated time: {w.estimated_time}")
+    click.echo(f"Steps: {len(w.steps)}")
+    if w.prerequisites:
+        click.echo(f"Prerequisites: {', '.join(w.prerequisites)}")
+    click.echo("")
+
+    # Show steps
+    start_step = (step - 1) if step else 0
+    start_step = max(0, min(start_step, len(w.steps) - 1))
+
+    for i, s in enumerate(w.steps[start_step:], start=start_step + 1):
+        click.echo("-" * 60)
+        click.echo(f"Step {i}/{len(w.steps)}: {s.title}")
+        click.echo(f"Type: {s.step_type.value.upper()}")
+        click.echo("-" * 60)
+        click.echo("")
+
+        # Simple markdown rendering for terminal
+        content = s.content.strip()
+        # Remove markdown headers (show as plain text)
+        import re
+        content = re.sub(r'^#{1,3}\s+', '', content, flags=re.MULTILINE)
+        # Convert **bold** to CAPS for terminal
+        content = re.sub(r'\*\*(.+?)\*\*', lambda m: m.group(1).upper(), content)
+        # Remove single asterisks (italic)
+        content = re.sub(r'\*(.+?)\*', r'\1', content)
+
+        click.echo(content)
+        click.echo("")
+
+        # Prompt to continue (unless it's the last step)
+        if i < len(w.steps):
+            try:
+                click.echo("Press Enter for next step (q to quit)...")
+                response = input()
+                if response.lower() == 'q':
+                    break
+            except (KeyboardInterrupt, EOFError):
+                break
+            click.echo("")
+
+    click.echo("=" * 60)
+    click.echo("Walkthrough complete!")
+    click.echo("")
+    click.echo(f"To load this scenario: timeos scenario load {w.scenario_name}")
+    click.echo("=" * 60)
+
+
 if __name__ == "__main__":
     cli()

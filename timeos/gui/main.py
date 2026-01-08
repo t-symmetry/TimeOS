@@ -225,6 +225,29 @@ class MainWindow(QMainWindow):
         view_menu.addAction(fullscreen_action)
         self._fullscreen_action = fullscreen_action
 
+        # Learn menu
+        learn_menu = menubar.addMenu("&Learn")
+
+        walkthrough_action = QAction("&Walkthroughs...", self)
+        walkthrough_action.setShortcut(QKeySequence("Ctrl+W"))
+        walkthrough_action.triggered.connect(self._on_open_walkthrough)
+        learn_menu.addAction(walkthrough_action)
+
+        learn_menu.addSeparator()
+
+        # Quick walkthrough access
+        quick_walkthroughs = [
+            ("simple_timeline", "Your First Timeline"),
+            ("branching", "Exploring Alternatives"),
+            ("grandfather_paradox", "The Grandfather Paradox"),
+            ("risk_escalation", "Understanding Risk Levels"),
+        ]
+        for name, title in quick_walkthroughs:
+            action = QAction(title, self)
+            action.setData(name)
+            action.triggered.connect(lambda checked, n=name: self._on_quick_walkthrough(n))
+            learn_menu.addAction(action)
+
         # Help menu
         help_menu = menubar.addMenu("&Help")
 
@@ -403,6 +426,23 @@ class MainWindow(QMainWindow):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load scenario: {e}")
+
+    def _on_open_walkthrough(self) -> None:
+        """Open walkthrough dialog."""
+        from timeos.gui.dialogs.walkthrough_dialog import WalkthroughDialog
+
+        dialog = WalkthroughDialog(parent=self)
+        dialog.load_scenario_requested.connect(self._load_scenario)
+        dialog.show()  # Non-modal
+
+    def _on_quick_walkthrough(self, scenario_name: str) -> None:
+        """Open a specific walkthrough."""
+        from timeos.gui.dialogs.walkthrough_dialog import WalkthroughDialog
+
+        dialog = WalkthroughDialog(parent=self)
+        dialog.load_scenario_requested.connect(self._load_scenario)
+        dialog.set_walkthrough(scenario_name)
+        dialog.show()  # Non-modal
 
     def _on_displace(self) -> None:
         """Open displacement dialog."""

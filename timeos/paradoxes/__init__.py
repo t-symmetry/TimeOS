@@ -44,6 +44,16 @@ from timeos.paradoxes.demo_scenarios import (
     SCENARIOS_BY_CATEGORY,
 )
 
+from timeos.paradoxes.walkthrough import (
+    Walkthrough,
+    WalkthroughStep,
+    StepType,
+    get_walkthrough,
+    list_walkthroughs,
+    ALL_WALKTHROUGHS,
+    WALKTHROUGHS_BY_SCENARIO,
+)
+
 __all__ = [
     # Paradox demos
     "ParadoxDemo",
@@ -63,4 +73,12 @@ __all__ = [
     "ALL_SCENARIOS",
     "SCENARIOS_BY_NAME",
     "SCENARIOS_BY_CATEGORY",
+    # Walkthroughs
+    "Walkthrough",
+    "WalkthroughStep",
+    "StepType",
+    "get_walkthrough",
+    "list_walkthroughs",
+    "ALL_WALKTHROUGHS",
+    "WALKTHROUGHS_BY_SCENARIO",
 ]
