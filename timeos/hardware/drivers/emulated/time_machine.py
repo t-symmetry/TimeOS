@@ -829,7 +829,7 @@ class EmulatedTimeMachine:
             quench_risk=thermal_status.quench_risk,
             cooling_load_watts=thermal_status.cooling_load_watts,
             cooling_headroom_watts=self._config.cooling_power_watts,
-            time_to_quench_seconds=thermal_status.time_to_quench,
+            time_to_quench_seconds=thermal_status.time_to_quench_seconds,
         )
 
     def _update_state(

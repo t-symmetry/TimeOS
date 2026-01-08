@@ -299,7 +299,7 @@ class EmulatedFieldGenerator(FieldGenerator):
             status=self._status,
             uptime_seconds=uptime,
             calibration_valid=True,
-            last_calibration=self._start_time,
+            calibration_timestamp=self._start_time,
             custom_metrics={
                 "current_amps": self._current_amps,
                 "target_current": self._target_current,

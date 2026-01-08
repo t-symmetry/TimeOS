@@ -300,7 +300,7 @@ class EmulatedTDU(TemporalDisplacementUnit):
             status=self._status,
             uptime_seconds=uptime,
             calibration_valid=self._calibrated,
-            last_calibration=self._calibration_time,
+            calibration_timestamp=self._calibration_time,
             custom_metrics={
                 "phase": self._phase.value,
                 "state": self._current_state.value,
