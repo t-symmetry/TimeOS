@@ -1,0 +1,15 @@
+# SetAnchor - Set or update the temporal anchor point
+
+# Request
+bool set_current                       # Use current position as anchor
+float64 x                              # Manual coordinates (if not set_current)
+float64 y
+float64 z
+float64 t
+string anchor_id                       # Identifier for this anchor
+string description                     # Human-readable description
+---
+# Response
+bool success                           # Anchor set successfully
+timeos_msgs/ChronoStamp anchor_point   # The new anchor coordinates
+string message                         # Status or error message

@@ -1,0 +1,24 @@
+# ValidateCausality - Check causality constraints for a proposed action
+
+# Request
+string action_type                     # Type of action to validate
+float64 source_x                       # Source spacetime coordinates
+float64 source_y
+float64 source_z
+float64 source_t
+float64 target_x                       # Target spacetime coordinates
+float64 target_y
+float64 target_z
+float64 target_t
+string timeline_id                     # Timeline context
+string[] constraint_names              # Specific constraints to check (empty = all)
+---
+# Response
+bool valid                             # Action is causally valid
+float64 risk                           # Cumulative risk (0.0 to 1.0)
+string[] passed_constraints            # Constraints that passed
+string[] failed_constraints            # Constraints that failed
+string[] warning_constraints           # Constraints with warnings
+float64[] constraint_risks             # Risk per constraint
+string[] explanations                  # Human-readable explanations
+string recommendation                  # Recommended action

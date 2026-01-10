@@ -1,0 +1,13 @@
+# StartExperiment - Start a T-symmetry or research experiment
+
+# Request
+timeos_msgs/ExperimentConfig config    # Experiment configuration
+bool validate_only                     # Just validate, don't start
+---
+# Response
+bool success                           # Experiment started
+string experiment_id                   # Assigned experiment ID
+string[] validation_errors             # Configuration errors
+string[] validation_warnings           # Configuration warnings
+float64 estimated_duration_sec         # Estimated completion time
+string message                         # Status or error message

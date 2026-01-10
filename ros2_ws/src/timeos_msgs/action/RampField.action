@@ -1,0 +1,25 @@
+# RampField - Ramp field to target value (long-running operation)
+
+# Goal
+float64 target_tesla                   # Target field strength
+float64 ramp_rate_tesla_per_sec        # Ramp rate (0 = use default)
+bool hold_at_target                    # Hold at target when reached
+float64 hold_duration_sec              # How long to hold (0 = indefinite)
+---
+# Result
+bool success                           # Ramp completed successfully
+float64 final_field_tesla              # Actual final field
+float64 ramp_duration_sec              # Time taken to ramp
+float64 energy_used_joules             # Energy consumed
+float64 peak_temperature_kelvin        # Peak temperature during ramp
+string message                         # Status or error message
+---
+# Feedback
+float64 current_field_tesla            # Current field strength
+float64 progress                       # 0.0 to 1.0
+float64 estimated_remaining_sec        # ETA
+float64 ramp_rate_actual               # Actual ramp rate
+float64 temperature_kelvin             # Current temperature
+float64 power_watts                    # Current power draw
+float64 quench_risk                    # Current quench risk
+string status_message                  # Current status

@@ -1,0 +1,19 @@
+# CreateEvent - Create a new event in the timeline
+
+# Request
+string timeline_id                     # Target timeline (empty = current)
+uint8 event_type                       # Event type (see TimelineEvent)
+float64 x                              # Spatial coordinates
+float64 y
+float64 z
+float64 t                              # Temporal coordinate
+string description                     # Event description
+string data_json                       # Optional JSON payload
+string parent_event_id                 # Optional parent for causality
+---
+# Response
+bool success                           # Operation succeeded
+string event_id                        # Created event ID
+string message                         # Status message or error
+float64 causality_risk                 # Risk assessment for this event
+string[] warnings                      # Any warnings generated

@@ -1,0 +1,30 @@
+# RunExperiment - Execute a T-symmetry experiment (long-running)
+
+# Goal
+timeos_msgs/ExperimentConfig config    # Experiment configuration
+---
+# Result
+bool success                           # Experiment completed
+string experiment_id                   # Experiment identifier
+timeos_msgs/MeasurementResult[] results # All measurement results
+uint32 total_samples                   # Total samples collected
+float64 duration_sec                   # Actual duration
+string output_path                     # Path to saved data
+float64 t_symmetry_score               # Overall T-symmetry score
+string conclusion                      # Brief conclusion
+string message                         # Status or error message
+string[] anomalies                     # Any anomalies detected
+---
+# Feedback
+string phase                           # Current phase name
+float64 progress                       # Overall progress 0.0 to 1.0
+uint32 iteration                       # Current iteration number
+uint32 total_iterations                # Total iterations
+uint32 samples_collected               # Samples collected so far
+float64 elapsed_sec                    # Time elapsed
+float64 remaining_sec                  # Estimated remaining
+string current_operation               # What's happening now
+float64 field_tesla                    # Current field
+float64 temperature_kelvin             # Current temperature
+float64 preliminary_t_score            # Preliminary T-symmetry score
+string status_message                  # Current status

@@ -1,0 +1,35 @@
+# Displace - Perform temporal displacement (long-running operation)
+
+# Goal
+float64 target_x                       # Target spatial coordinates
+float64 target_y
+float64 target_z
+float64 target_t                       # Target temporal coordinate
+string timeline_id                     # Target timeline (empty = current)
+bool create_branch                     # Create new branch on displacement
+float64 timeout_sec                    # Timeout (0 = no timeout)
+---
+# Result
+bool success                           # Displacement completed successfully
+timeos_msgs/ChronoStamp final_position # Final position
+string event_id                        # Event ID for this displacement
+string branch_id                       # New branch ID (if created)
+float64 actual_delta_t                 # Actual temporal displacement
+float64 energy_used_joules             # Energy consumed
+string message                         # Status or error message
+string[] warnings                      # Any warnings
+---
+# Feedback
+uint8 phase                            # Current phase
+uint8 PHASE_PREPARING = 0
+uint8 PHASE_VALIDATING = 1
+uint8 PHASE_CHARGING = 2
+uint8 PHASE_DISPLACING = 3
+uint8 PHASE_STABILIZING = 4
+uint8 PHASE_VERIFYING = 5
+float64 progress                       # 0.0 to 1.0
+float64 estimated_remaining_sec        # ETA
+string status_message                  # Current status
+float64 current_t                      # Current temporal position
+float64 energy_percent                 # Energy charging progress
+float64 causality_risk                 # Current risk assessment

@@ -1,0 +1,14 @@
+# ArmSystem - Arm or disarm the safety system
+
+# Request
+bool arm                               # True = arm, False = disarm
+string operator_id                     # Operator identifier
+string authorization_code              # Authorization (if required)
+bool force                             # Force arm despite warnings
+---
+# Response
+bool success                           # Operation succeeded
+uint8 safety_state                     # New safety state (see SafetyState)
+string[] unmet_conditions              # Conditions preventing arm
+string[] warnings                      # Warnings (may still arm)
+string message                         # Status or error message

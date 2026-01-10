@@ -1,0 +1,11 @@
+# GetSystemStatus - Get comprehensive system status
+
+# Request
+bool include_history                   # Include recent history
+uint32 history_depth                   # How many historical entries
+string[] modules                       # Specific modules (empty = all)
+---
+# Response
+timeos_msgs/SystemStatus status        # Current system status
+bool success                           # Request succeeded
+string message                         # Status or error message

@@ -1,0 +1,10 @@
+# TriggerEstop - Emergency stop
+
+# Request
+string reason                          # Reason for E-stop
+string operator_id                     # Who triggered it
+---
+# Response
+bool success                           # E-stop activated
+string message                         # Status message
+builtin_interfaces/Time triggered_at   # When E-stop was triggered

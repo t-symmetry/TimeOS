@@ -1,0 +1,46 @@
+# T-Symmetry Experiment Default Configuration
+#
+# This configuration is for micro T-symmetry measurements
+# using field reversal techniques.
+
+experiment:
+  type: t_symmetry
+  duration_seconds: 60.0
+  sample_rate_hz: 100.0
+  num_iterations: 10
+
+field:
+  max_strength_tesla: 1.0
+  ramp_rate_tesla_per_sec: 0.01
+  reversal_enabled: true
+  reversal_delay_sec: 5.0
+  hold_time_sec: 10.0
+
+analysis:
+  t_symmetry_window_sec: 5.0
+  min_samples: 500
+  significance_threshold_sigma: 3.0
+  measure_forward: true
+  measure_backward: true
+
+sensors:
+  - id: magnetometer_z
+    sample_rate: 100.0
+  - id: magnetometer_x
+    sample_rate: 100.0
+  - id: magnetometer_y
+    sample_rate: 100.0
+  - id: temp_cryostat
+    sample_rate: 10.0
+
+safety:
+  max_field_tesla: 15.0
+  max_temperature_kelvin: 10.0
+  max_quench_risk: 0.3
+  watchdog_timeout_ms: 1000
+
+output:
+  directory: /tmp/timeos_experiments
+  format: hdf5
+  compress: true
+  include_raw: true

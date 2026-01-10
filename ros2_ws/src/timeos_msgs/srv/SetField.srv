@@ -1,0 +1,14 @@
+# SetField - Set field generator parameters
+
+# Request
+float64 field_strength_tesla           # Target field strength
+float64 ramp_rate_tesla_per_sec        # Ramp rate (0 = use default)
+bool immediate                         # Skip ramp, set immediately (unsafe)
+float64 timeout_sec                    # Timeout for operation (0 = no timeout)
+---
+# Response
+bool success                           # Command accepted
+bool at_setpoint                       # Already at requested setpoint
+float64 estimated_time_sec             # Estimated time to reach setpoint
+float64 actual_setpoint                # Actual setpoint (may be limited)
+string message                         # Status or error message

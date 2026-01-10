@@ -1,0 +1,33 @@
+# Calibrate - Run calibration procedure (long-running)
+
+# Goal
+string[] sensor_ids                    # Sensors to calibrate (empty = all)
+string calibration_type                # Type of calibration
+string TYPE_FULL = "full"
+string TYPE_QUICK = "quick"
+string TYPE_FIELD = "field"
+string TYPE_THERMAL = "thermal"
+string TYPE_TEMPORAL = "temporal"
+bool save_results                      # Save calibration results
+---
+# Result
+bool success                           # Calibration completed
+string calibration_id                  # Calibration reference ID
+string[] calibrated_sensors            # Successfully calibrated
+string[] failed_sensors                # Failed to calibrate
+float64[] offsets                      # Calibration offsets
+float64[] scales                       # Calibration scales
+float64 overall_quality                # Overall calibration quality
+string output_path                     # Path to calibration file
+string message                         # Status or error message
+---
+# Feedback
+string current_sensor                  # Sensor being calibrated
+float64 progress                       # 0.0 to 1.0
+string step                            # Current calibration step
+uint32 step_number                     # Step number
+uint32 total_steps                     # Total steps
+float64 current_offset                 # Current offset measurement
+float64 current_scale                  # Current scale measurement
+float64 estimated_remaining_sec        # ETA
+string status_message                  # Current status

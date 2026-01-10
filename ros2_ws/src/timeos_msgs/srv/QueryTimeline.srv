@@ -1,0 +1,16 @@
+# QueryTimeline - Query events from the timeline
+
+# Request
+string timeline_id                     # Timeline to query (empty = all)
+string event_type_filter               # Filter by event type (empty = all)
+float64 t_min                          # Minimum time (0 = no limit)
+float64 t_max                          # Maximum time (0 = no limit)
+uint32 max_results                     # Maximum events to return (0 = unlimited)
+bool include_children                  # Include causal children
+bool chronological_order               # True = oldest first
+---
+# Response
+bool success                           # Query succeeded
+timeos_msgs/TimelineEvent[] events     # Matching events
+uint32 total_count                     # Total matches (may exceed max_results)
+string message                         # Status or error message

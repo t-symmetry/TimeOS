@@ -1,0 +1,13 @@
+# StopExperiment - Stop a running experiment
+
+# Request
+string experiment_id                   # Experiment to stop (empty = current)
+bool save_partial                      # Save partial results
+string reason                          # Reason for stopping
+---
+# Response
+bool success                           # Experiment stopped
+bool data_saved                        # Partial data was saved
+string output_path                     # Path to saved data
+float64 completion_percent             # How much was completed
+string message                         # Status or error message

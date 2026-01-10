@@ -1,0 +1,12 @@
+# GetMeasurement - Get measurement results
+
+# Request
+string experiment_id                   # Experiment to query
+string measurement_id                  # Specific measurement (empty = latest)
+bool include_raw_data                  # Include raw data path
+---
+# Response
+bool success                           # Query succeeded
+timeos_msgs/MeasurementResult result   # Measurement result
+string raw_data_path                   # Path to raw data (if requested)
+string message                         # Status or error message
