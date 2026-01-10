@@ -3,16 +3,20 @@
 This module provides a Qt-friendly interface to ROS2 without requiring
 rclpy in the GUI process. All ROS2 communication happens through
 subprocess calls to ROS2 CLI tools.
+
+The bridge automatically detects and sources the timeos-ros conda
+environment if ROS2 is not directly available in PATH.
 """
 
 import json
+import os
 import subprocess
 import shutil
 from dataclasses import dataclass, field
 from typing import Optional, Dict, List, Any, Callable
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Signal, QProcess, QTimer
+from PySide6.QtCore import QObject, Signal, QProcess, QTimer, QProcessEnvironment
 
 
 @dataclass
@@ -90,6 +94,15 @@ PRIORITY_TOPICS = [
     '/timeos/t_symmetry/result',
 ]
 
+# State topics - these are polled regularly for machine state
+STATE_TOPICS = {
+    'field': '/timeos/field_state',
+    'thermal': '/timeos/thermal_state',
+    'safety': '/timeos/safety_state',
+    'tdu': '/timeos/tdu_state',
+    'system': '/timeos/system_status',
+}
+
 # Key services
 PRIORITY_SERVICES = [
     ('/timeos/set_field', 'timeos_msgs/srv/SetField'),
@@ -113,11 +126,19 @@ class ROS2Bridge(QObject):
         launch_started(str): launch_name
         launch_stopped(str): launch_name
         error_occurred(str): error message
+        state_updated(dict): Combined machine state from all topics
+        field_state_updated(dict): Field generator state
+        thermal_state_updated(dict): Thermal system state
+        safety_state_updated(dict): Safety system state
     """
 
     ros2_available_changed = Signal(bool)
     nodes_updated = Signal(list)
     topics_updated = Signal(list)
+    state_updated = Signal(dict)
+    field_state_updated = Signal(dict)
+    thermal_state_updated = Signal(dict)
+    safety_state_updated = Signal(dict)
     services_updated = Signal(list)
     topic_data_received = Signal(str, str)
     service_response = Signal(str, bool, str)
@@ -131,6 +152,8 @@ class ROS2Bridge(QObject):
         self._ros2_available = False
         self._ros2_path: Optional[str] = None
         self._workspace_path: Optional[Path] = None
+        self._conda_env_path: Optional[Path] = None
+        self._ros2_env: Optional[QProcessEnvironment] = None
 
         # Active processes
         self._launch_processes: Dict[str, QProcess] = {}
@@ -142,17 +165,45 @@ class ROS2Bridge(QObject):
         self._topics: List[TopicInfo] = []
         self._services: List[ServiceInfo] = []
 
+        # Cached machine state from ROS2 topics
+        self._state_cache: Dict[str, Dict[str, Any]] = {
+            'field': {},
+            'thermal': {},
+            'safety': {},
+            'tdu': {},
+            'system': {},
+        }
+        self._state_poll_processes: Dict[str, QProcess] = {}
+
         # Auto-refresh timer
         self._refresh_timer = QTimer(self)
         self._refresh_timer.timeout.connect(self._on_refresh_timeout)
 
-        # Check ROS2 availability
+        # State polling timer (faster rate for machine state)
+        self._state_timer = QTimer(self)
+        self._state_timer.timeout.connect(self._poll_state_topics)
+
+        # Check ROS2 availability (also finds conda env if needed)
         self._check_ros2_available()
 
     @property
     def ros2_available(self) -> bool:
         """Whether ROS2 CLI tools are available."""
         return self._ros2_available
+
+    @property
+    def ros2_source(self) -> str:
+        """Description of where ROS2 is being used from."""
+        if not self._ros2_available:
+            return "Not available"
+        if self._conda_env_path:
+            return f"timeos-ros conda ({self._conda_env_path})"
+        return f"System PATH ({self._ros2_path})"
+
+    @property
+    def using_conda(self) -> bool:
+        """Whether ROS2 is being used from a conda environment."""
+        return self._conda_env_path is not None
 
     @property
     def nodes(self) -> List[NodeInfo]:
@@ -170,7 +221,12 @@ class ROS2Bridge(QObject):
         return self._services
 
     def _check_ros2_available(self) -> bool:
-        """Check if ROS2 CLI tools are available."""
+        """Check if ROS2 CLI tools are available.
+
+        First checks if ros2 is in PATH. If not, looks for the timeos-ros
+        conda environment and sets up the environment for ROS2 commands.
+        """
+        # First, check if ros2 is directly available
         ros2_path = shutil.which('ros2')
         if ros2_path:
             try:
@@ -182,13 +238,137 @@ class ROS2Bridge(QObject):
                 self._ros2_available = True
                 self._ros2_path = ros2_path
                 self._find_workspace()
+                self.ros2_available_changed.emit(self._ros2_available)
+                return self._ros2_available
             except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
-                self._ros2_available = False
-        else:
-            self._ros2_available = False
+                pass
 
+        # Try to find timeos-ros conda environment
+        if self._find_conda_ros2_env():
+            self._ros2_available = True
+            self._find_workspace()
+            self.ros2_available_changed.emit(self._ros2_available)
+            return self._ros2_available
+
+        self._ros2_available = False
         self.ros2_available_changed.emit(self._ros2_available)
         return self._ros2_available
+
+    def _find_conda_ros2_env(self) -> bool:
+        """Find and configure the timeos-ros conda environment.
+
+        Returns:
+            True if conda environment was found and configured.
+        """
+        # Look for conda installation
+        conda_base = None
+        for path in [
+            Path.home() / 'miniconda3',
+            Path.home() / 'anaconda3',
+            Path.home() / 'mambaforge',
+            Path.home() / 'miniforge3',
+            Path('/opt/conda'),
+            Path('/usr/local/conda'),
+        ]:
+            if path.exists():
+                conda_base = path
+                break
+
+        if not conda_base:
+            return False
+
+        # Look for timeos-ros environment
+        env_path = conda_base / 'envs' / 'timeos-ros'
+        if not env_path.exists():
+            return False
+
+        # Check if ros2 exists in that environment
+        ros2_bin = env_path / 'bin' / 'ros2'
+        if not ros2_bin.exists():
+            return False
+
+        self._conda_env_path = env_path
+        self._ros2_path = str(ros2_bin)
+
+        # Build environment for ROS2 processes
+        self._ros2_env = self._build_ros2_environment(env_path)
+
+        # Test that it works
+        try:
+            result = subprocess.run(
+                [str(ros2_bin), 'node', 'list'],
+                capture_output=True,
+                timeout=5,
+                env=self._get_ros2_env_dict(),
+            )
+            return True
+        except Exception:
+            self._conda_env_path = None
+            self._ros2_path = None
+            self._ros2_env = None
+            return False
+
+    def _build_ros2_environment(self, env_path: Path) -> QProcessEnvironment:
+        """Build QProcessEnvironment for ROS2 commands.
+
+        Args:
+            env_path: Path to the conda environment.
+
+        Returns:
+            Configured QProcessEnvironment.
+        """
+        env = QProcessEnvironment.systemEnvironment()
+
+        # Add conda environment to PATH
+        current_path = env.value('PATH', '')
+        new_path = f"{env_path}/bin:{current_path}"
+        env.insert('PATH', new_path)
+
+        # Set conda environment variables
+        env.insert('CONDA_PREFIX', str(env_path))
+        env.insert('CONDA_DEFAULT_ENV', 'timeos-ros')
+
+        # ROS2-specific environment variables
+        env.insert('ROS_VERSION', '2')
+        env.insert('ROS_PYTHON_VERSION', '3')
+        env.insert('ROS_DISTRO', 'humble')
+
+        # AMENT environment
+        env.insert('AMENT_PREFIX_PATH', str(env_path))
+        env.insert('CMAKE_PREFIX_PATH', str(env_path))
+        env.insert('COLCON_PREFIX_PATH', str(env_path))
+
+        # Python path for ROS2 packages
+        python_path = env.value('PYTHONPATH', '')
+        ros2_python = f"{env_path}/lib/python3.11/site-packages"
+        if python_path:
+            env.insert('PYTHONPATH', f"{ros2_python}:{python_path}")
+        else:
+            env.insert('PYTHONPATH', ros2_python)
+
+        # Also add the TimeOS workspace if found
+        if self._workspace_path:
+            install_path = self._workspace_path / 'install'
+            if install_path.exists():
+                ament = env.value('AMENT_PREFIX_PATH', '')
+                env.insert('AMENT_PREFIX_PATH', f"{install_path}/timeos_msgs:{install_path}/timeos_ros:{ament}")
+
+        return env
+
+    def _get_ros2_env_dict(self) -> dict:
+        """Get ROS2 environment as a dictionary for subprocess.run()."""
+        if self._ros2_env is None:
+            return os.environ.copy()
+
+        env_dict = os.environ.copy()
+        for key in self._ros2_env.keys():
+            env_dict[key] = self._ros2_env.value(key)
+        return env_dict
+
+    def _configure_process_env(self, process: QProcess) -> None:
+        """Configure a QProcess with ROS2 environment."""
+        if self._ros2_env is not None:
+            process.setProcessEnvironment(self._ros2_env)
 
     def _find_workspace(self) -> None:
         """Find TimeOS ROS2 workspace."""
@@ -241,8 +421,9 @@ class ROS2Bridge(QObject):
             return
 
         process = QProcess(self)
+        self._configure_process_env(process)
         process.finished.connect(lambda: self._on_node_list_finished(process))
-        process.start('ros2', ['node', 'list'])
+        process.start(self._ros2_path or 'ros2', ['node', 'list'])
 
     def _on_node_list_finished(self, process: QProcess) -> None:
         """Handle node list completion."""
@@ -283,8 +464,9 @@ class ROS2Bridge(QObject):
             return
 
         process = QProcess(self)
+        self._configure_process_env(process)
         process.finished.connect(lambda: self._on_topic_list_finished(process))
-        process.start('ros2', ['topic', 'list', '-t'])
+        process.start(self._ros2_path or 'ros2', ['topic', 'list', '-t'])
 
     def _on_topic_list_finished(self, process: QProcess) -> None:
         """Handle topic list completion."""
@@ -320,8 +502,9 @@ class ROS2Bridge(QObject):
             return
 
         process = QProcess(self)
+        self._configure_process_env(process)
         process.finished.connect(lambda: self._on_service_list_finished(process))
-        process.start('ros2', ['service', 'list', '-t'])
+        process.start(self._ros2_path or 'ros2', ['service', 'list', '-t'])
 
     def _on_service_list_finished(self, process: QProcess) -> None:
         """Handle service list completion."""
@@ -368,6 +551,7 @@ class ROS2Bridge(QObject):
             self.stop_echo_topic(topic)
 
         process = QProcess(self)
+        self._configure_process_env(process)
         process.readyReadStandardOutput.connect(
             lambda: self._on_topic_data(topic, process, callback)
         )
@@ -376,7 +560,7 @@ class ROS2Bridge(QObject):
         )
 
         # Echo with YAML output for easier parsing
-        process.start('ros2', ['topic', 'echo', '--once', topic])
+        process.start(self._ros2_path or 'ros2', ['topic', 'echo', '--once', topic])
         self._echo_processes[topic] = process
         return True
 
@@ -425,6 +609,7 @@ class ROS2Bridge(QObject):
             return
 
         process = QProcess(self)
+        self._configure_process_env(process)
         process.finished.connect(
             lambda: self._on_service_finished(service, process)
         )
@@ -432,7 +617,7 @@ class ROS2Bridge(QObject):
         # Convert request to YAML format
         request_yaml = json.dumps(request)
 
-        process.start('ros2', [
+        process.start(self._ros2_path or 'ros2', [
             'service', 'call',
             service,
             srv_type,
@@ -482,6 +667,7 @@ class ROS2Bridge(QObject):
         launch_file = config['launch_file']
 
         process = QProcess(self)
+        self._configure_process_env(process)
         process.finished.connect(
             lambda: self._on_launch_finished(config_name, process)
         )
@@ -497,7 +683,7 @@ class ROS2Bridge(QObject):
             for key, value in args.items():
                 cmd_args.append(f'{key}:={value}')
 
-        process.start('ros2', cmd_args)
+        process.start(self._ros2_path or 'ros2', cmd_args)
         self._launch_processes[config_name] = process
         self.launch_started.emit(config_name)
         return True
@@ -568,9 +754,211 @@ class ROS2Bridge(QObject):
 
         return status
 
+    # =========================================================================
+    # State Polling - Continuous machine state from ROS2 topics
+    # =========================================================================
+
+    def start_state_polling(self, interval_ms: int = 500) -> None:
+        """Start polling state topics for machine state.
+
+        Args:
+            interval_ms: Polling interval in milliseconds.
+        """
+        if not self._ros2_available:
+            return
+        self._state_timer.start(interval_ms)
+        self._poll_state_topics()  # Immediate first poll
+
+    def stop_state_polling(self) -> None:
+        """Stop polling state topics."""
+        self._state_timer.stop()
+        # Clean up any active poll processes
+        for key, process in list(self._state_poll_processes.items()):
+            process.terminate()
+            process.deleteLater()
+        self._state_poll_processes.clear()
+
+    def _poll_state_topics(self) -> None:
+        """Poll all state topics once."""
+        if not self._ros2_available:
+            return
+
+        for key, topic in STATE_TOPICS.items():
+            # Skip if already polling this topic
+            if key in self._state_poll_processes:
+                continue
+            self._poll_single_topic(key, topic)
+
+    def _poll_single_topic(self, key: str, topic: str) -> None:
+        """Poll a single topic for state."""
+        process = QProcess(self)
+        self._configure_process_env(process)
+        process.finished.connect(
+            lambda code, status, k=key, p=process: self._on_state_poll_finished(k, p)
+        )
+
+        process.start(self._ros2_path or 'ros2', ['topic', 'echo', '--once', topic])
+        self._state_poll_processes[key] = process
+
+    def _on_state_poll_finished(self, key: str, process: QProcess) -> None:
+        """Handle state poll completion."""
+        if key in self._state_poll_processes:
+            del self._state_poll_processes[key]
+
+        if process.exitCode() != 0:
+            process.deleteLater()
+            return
+
+        output = process.readAllStandardOutput().data().decode('utf-8')
+        process.deleteLater()
+
+        # Parse YAML output to dict
+        state = self._parse_yaml_output(output)
+        if state:
+            old_state = self._state_cache.get(key, {})
+            self._state_cache[key] = state
+
+            # Emit specific signal if state changed
+            if state != old_state:
+                if key == 'field':
+                    self.field_state_updated.emit(state)
+                elif key == 'thermal':
+                    self.thermal_state_updated.emit(state)
+                elif key == 'safety':
+                    self.safety_state_updated.emit(state)
+
+                # Always emit combined state update
+                self.state_updated.emit(self.get_machine_state())
+
+    def _parse_yaml_output(self, output: str) -> Dict[str, Any]:
+        """Parse ROS2 echo YAML output to dictionary.
+
+        Args:
+            output: YAML formatted output from ros2 topic echo.
+
+        Returns:
+            Parsed dictionary.
+        """
+        try:
+            import yaml
+            # ROS2 echo outputs YAML with --- separators
+            # Take the first document
+            docs = output.split('---')
+            if docs:
+                doc = docs[0].strip()
+                if doc:
+                    return yaml.safe_load(doc) or {}
+        except Exception:
+            pass
+        return {}
+
+    @property
+    def field_state(self) -> Dict[str, Any]:
+        """Current field generator state from cache."""
+        return self._state_cache.get('field', {})
+
+    @property
+    def thermal_state(self) -> Dict[str, Any]:
+        """Current thermal state from cache."""
+        return self._state_cache.get('thermal', {})
+
+    @property
+    def safety_state(self) -> Dict[str, Any]:
+        """Current safety state from cache."""
+        return self._state_cache.get('safety', {})
+
+    @property
+    def tdu_state(self) -> Dict[str, Any]:
+        """Current TDU state from cache."""
+        return self._state_cache.get('tdu', {})
+
+    def get_machine_state(self) -> Dict[str, Any]:
+        """Get combined machine state matching MachineModel.get_state() format.
+
+        Returns:
+            Dictionary with all machine state.
+        """
+        field = self._state_cache.get('field', {})
+        thermal = self._state_cache.get('thermal', {})
+        safety = self._state_cache.get('safety', {})
+        tdu = self._state_cache.get('tdu', {})
+
+        # Map ROS2 states to expected format
+        return {
+            # Module statuses
+            "tdu_status": self._map_status(tdu.get('state', 'offline')),
+            "field_status": "active" if field.get('active') else "standby",
+            "causality_status": "active",
+            "safety_status": "active" if safety.get('all_interlocks_ok') else "warning",
+            "anchor_status": "active",
+
+            # Position
+            "current_time": 0.0,
+            "frame": "origin",
+            "uncertainty": 0.0,
+
+            # Field
+            "field_active": field.get('active', False),
+            "field_strength": field.get('field_strength', 0.0),
+            "field_symmetry": 0.0,
+            "power_consumption": field.get('power_watts', 0.0),
+
+            # Thermal
+            "temperature_kelvin": thermal.get('temperature_kelvin', 4.2),
+            "quench_risk": thermal.get('quench_risk', 0.0),
+
+            # Causality
+            "causality": "NOMINAL" if safety.get('all_interlocks_ok') else "WARNING",
+            "paradox_risk": thermal.get('quench_risk', 0.0),
+            "causal_violations": safety.get('active_faults', []),
+
+            # Anchor
+            "anchor_connected": True,
+            "anchor_time": 0.0,
+            "anchor_strength": 1.0,
+
+            # Overall
+            "initialized": self._ros2_available and bool(field),
+            "is_displacing": tdu.get('state') == 'displacing',
+
+            # Relativistic quantities (would come from physics node)
+            "velocity_beta": 0.0,
+            "lorentz_gamma": 1.0,
+            "proper_time": 0.0,
+
+            # Emulated-specific
+            "machine_state": tdu.get('state', 'unknown'),
+            "ramp_state": self._map_ramp_state(field.get('ramp_state', 0)),
+        }
+
+    def _map_status(self, state: str) -> str:
+        """Map ROS2 state string to status."""
+        mapping = {
+            'idle': 'standby',
+            'displacing': 'active',
+            'offline': 'offline',
+            'fault': 'error',
+        }
+        return mapping.get(state, 'unknown')
+
+    def _map_ramp_state(self, state: int) -> str:
+        """Map ramp state integer to string."""
+        mapping = {
+            0: 'idle',
+            1: 'ramp_up',
+            2: 'ramp_down',
+            3: 'holding',
+            4: 'quenching',
+        }
+        return mapping.get(state, 'unknown')
+
     def shutdown(self) -> None:
         """Clean shutdown of all processes."""
         self._refresh_timer.stop()
+        self._state_timer.stop()
+
+        # Stop state polling
+        self.stop_state_polling()
 
         # Stop all echo processes
         for topic in list(self._echo_processes.keys()):

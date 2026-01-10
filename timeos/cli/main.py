@@ -281,8 +281,17 @@ def import_cmd(ctx: click.Context, input_file: str) -> None:
 @cli.command()
 @click.option("--demo", is_flag=True, help="Launch with demo data.")
 @click.option("--emulated", is_flag=True, help="Use emulated hardware modules.")
-def gui(demo: bool, emulated: bool) -> None:
-    """Launch the TimeOS GUI control interface."""
+@click.option("--ros2", is_flag=True, help="Use ROS2 for all hardware communication (agnostic mode).")
+def gui(demo: bool, emulated: bool, ros2: bool) -> None:
+    """Launch the TimeOS GUI control interface.
+
+    Modes:
+      --demo       Simulated timeline with demo events
+      --emulated   Realistic hardware emulation
+      --ros2       Pure ROS2 interface (hardware-agnostic)
+
+    Combine flags: --demo --ros2 runs demo with ROS2 backend.
+    """
     try:
         from timeos.gui import launch
     except ImportError:
@@ -290,7 +299,7 @@ def gui(demo: bool, emulated: bool) -> None:
         click.echo("Install with: pip install timeos[gui]")
         sys.exit(1)
 
-    sys.exit(launch(demo=demo, emulated=emulated))
+    sys.exit(launch(demo=demo, emulated=emulated, ros2=ros2))
 
 
 @cli.command()

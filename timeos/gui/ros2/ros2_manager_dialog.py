@@ -129,11 +129,15 @@ class ROS2ManagerDialog(QDialog):
             if running:
                 info += f" | Running: {', '.join(running)}"
 
+            # Show source (conda vs system)
+            if self._bridge.using_conda:
+                info += " | via conda"
+
             self._info_label.setText(info)
             self._info_label.setStyleSheet("color: #00ff88;")
         else:
             self._info_label.setText(
-                "ROS2 not available. Source the timeos-ros conda environment."
+                "ROS2 not available. Install timeos-ros conda environment or source ROS2."
             )
             self._info_label.setStyleSheet("color: #ff8888;")
 

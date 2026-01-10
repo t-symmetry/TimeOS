@@ -13,6 +13,7 @@ from .ros2_bridge import (
     LAUNCH_CONFIGS,
     PRIORITY_TOPICS,
     PRIORITY_SERVICES,
+    STATE_TOPICS,
 )
 from .ros2_status_panel import ROS2StatusPanel, ROS2NodeLED
 from .node_manager_widget import NodeManagerWidget
@@ -30,6 +31,7 @@ __all__ = [
     'LAUNCH_CONFIGS',
     'PRIORITY_TOPICS',
     'PRIORITY_SERVICES',
+    'STATE_TOPICS',
     # Widgets
     'ROS2StatusPanel',
     'ROS2NodeLED',

@@ -32,12 +32,25 @@ from timeos.gui.models.machine_model import MachineModel
 class MainWindow(QMainWindow):
     """Main window for TimeOS Control application."""
 
-    def __init__(self, demo: bool = False, emulated: bool = False, parent: QWidget | None = None):
+    def __init__(
+        self,
+        demo: bool = False,
+        emulated: bool = False,
+        ros2: bool = False,
+        parent: QWidget | None = None,
+    ):
         super().__init__(parent)
 
         self._demo = demo
         self._emulated = emulated
-        self._model = MachineModel(demo=demo, emulated=emulated)
+        self._ros2 = ros2
+
+        # Choose model based on mode
+        if ros2:
+            from timeos.gui.models.ros2_machine_model import ROS2MachineModel
+            self._model = ROS2MachineModel()
+        else:
+            self._model = MachineModel(demo=demo, emulated=emulated)
 
         self._setup_ui()
         self._setup_menu()
@@ -51,7 +64,19 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self) -> None:
         """Set up the main window UI layout."""
-        self.setWindowTitle("TimeOS Control")
+        # Build title with mode indicators
+        title = "TimeOS Control"
+        modes = []
+        if self._ros2:
+            modes.append("ROS2")
+        if self._emulated:
+            modes.append("Emulated")
+        if self._demo:
+            modes.append("Demo")
+        if modes:
+            title += f" [{' + '.join(modes)}]"
+
+        self.setWindowTitle(title)
         self.setMinimumSize(1200, 800)
         self.resize(1400, 900)
 
