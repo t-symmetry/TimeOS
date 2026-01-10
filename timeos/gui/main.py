@@ -298,6 +298,13 @@ class MainWindow(QMainWindow):
         data_logger_action.triggered.connect(self._on_data_logger)
         hardware_menu.addAction(data_logger_action)
 
+        hardware_menu.addSeparator()
+
+        # ROS2 Management
+        ros2_action = QAction("ROS2 Management...", self)
+        ros2_action.triggered.connect(self._on_ros2_management)
+        hardware_menu.addAction(ros2_action)
+
         # Learn menu
         learn_menu = menubar.addMenu("&Learn")
 
@@ -675,6 +682,13 @@ class MainWindow(QMainWindow):
         logger_panel = DataLoggerPanel()
         layout.addWidget(logger_panel)
 
+        dialog.exec()
+
+    def _on_ros2_management(self) -> None:
+        """Open ROS2 management dialog."""
+        from timeos.gui.ros2 import ROS2ManagerDialog
+
+        dialog = ROS2ManagerDialog(self)
         dialog.exec()
 
     def _on_show_hw_status(self) -> None:
