@@ -33,13 +33,19 @@ class DataRecorderNode(Node):
         self._subs = []
 
         if MSGS_AVAILABLE:
-            # Subscribe to all sensor topics
-            self._sensor_sub = self.create_subscription(
-                SensorReading,
-                '/timeos/sensors/+',
-                self._on_sensor,
-                10
-            )
+            # Subscribe to default sensor topics
+            default_sensors = [
+                'magnetometer_z', 'magnetometer_x', 'magnetometer_y',
+                'temp_cryostat', 'temp_magnet', 'current_coil', 'voltage_supply'
+            ]
+            for sensor in default_sensors:
+                sub = self.create_subscription(
+                    SensorReading,
+                    f'/timeos/sensors/{sensor}',
+                    self._on_sensor,
+                    10
+                )
+                self._subs.append(sub)
 
         self.get_logger().info(f'Data recorder initialized, output: {self.output_dir}')
 

@@ -75,7 +75,7 @@ class SensorAggregatorNode(Node):
         self._lock = threading.Lock()
         self._sensors: Dict[str, SensorConfig] = {}
         self._sensor_threads: Dict[str, threading.Thread] = {}
-        self._publishers: Dict[str, Any] = {}
+        self._sensor_pubs: Dict[str, Any] = {}
         self._running = True
 
         # Emulated sensor state
@@ -192,7 +192,7 @@ class SensorAggregatorNode(Node):
                 f'/timeos/sensors/{sensor_id}',
                 10
             )
-            self._publishers[sensor_id] = pub
+            self._sensor_pubs[sensor_id] = pub
 
             # Start reading thread
             thread = threading.Thread(
@@ -314,7 +314,7 @@ class SensorAggregatorNode(Node):
         msg.snr_db = 60.0  # Approximate
         msg.confidence = 0.99
 
-        self._publishers[sensor_id].publish(msg)
+        self._sensor_pubs[sensor_id].publish(msg)
 
     def _get_uncertainty(self, config: SensorConfig) -> float:
         """Get measurement uncertainty for sensor type."""

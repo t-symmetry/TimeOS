@@ -1,5 +1,22 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.14)
 project(timeos_msgs)
+
+# Suppress CMP0148 warning for deprecated Python modules
+if(POLICY CMP0148)
+  cmake_policy(SET CMP0148 OLD)
+endif()
+
+# Help CMake find Python in conda environment
+if(DEFINED ENV{CONDA_PREFIX})
+  set(Python3_ROOT_DIR $ENV{CONDA_PREFIX})
+  set(Python_ROOT_DIR $ENV{CONDA_PREFIX})
+  set(Python3_EXECUTABLE "$ENV{CONDA_PREFIX}/bin/python")
+  set(Python_EXECUTABLE "$ENV{CONDA_PREFIX}/bin/python")
+  set(PYTHON_EXECUTABLE "$ENV{CONDA_PREFIX}/bin/python")
+  set(Python3_INCLUDE_DIR "$ENV{CONDA_PREFIX}/include/python3.11")
+  set(Python3_LIBRARY "$ENV{CONDA_PREFIX}/lib/libpython3.11.so")
+  set(Python3_NumPy_INCLUDE_DIR "$ENV{CONDA_PREFIX}/lib/python3.11/site-packages/numpy/core/include")
+endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)

@@ -44,6 +44,6 @@ float64 max_temperature_kelvin         # Temperature limit
 float64 max_causality_risk             # Risk threshold to abort
 
 # Metadata
-string operator                        # Who is running experiment
+string experimenter                    # Who is running experiment
 string[] tags                          # Tags for categorization
 string notes                           # Additional notes
