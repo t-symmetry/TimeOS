@@ -317,7 +317,10 @@ def main(args=None):
         if node._field_gen:
             node._field_gen.shutdown()
         node.destroy_node()
-        rclpy.shutdown()
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass  # Context may already be shutdown
 
 
 if __name__ == '__main__':
