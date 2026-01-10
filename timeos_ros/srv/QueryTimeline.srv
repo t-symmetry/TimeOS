@@ -1,0 +1,39 @@
+# QueryTimeline.srv - Query events from the timeline
+#
+# Request events matching specified criteria.
+
+# Branch to query (empty = all branches)
+string branch_id
+
+# Time range start (inclusive, -inf if not set)
+float64 t_start
+
+# Time range end (inclusive, +inf if not set)
+float64 t_end
+
+# Event types to include (empty = all)
+string[] event_types
+
+# Maximum number of events to return (0 = no limit)
+uint32 limit
+
+# Offset for pagination
+uint32 offset
+
+# Include payload data in response
+bool include_payload true
+
+---
+# Response
+
+# Whether query succeeded
+bool success
+
+# Matching events (as serialized TimelineEvent messages)
+timeos_msgs/TimelineEvent[] events
+
+# Total count of matching events (may be > len(events) if limited)
+uint32 total_count
+
+# Error message if failed
+string error_message

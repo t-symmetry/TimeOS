@@ -1,0 +1,48 @@
+# PlanDisplacement.srv - Plan a temporal displacement
+#
+# Request to compute displacement paths to a target time.
+
+# Target time coordinate
+float64 target_t
+
+# Target reference frame
+string target_frame_id
+
+# Displacement mode: "forward", "backward", "optimal"
+string mode "optimal"
+
+# Maximum energy budget (Joules, 0 = unlimited)
+float64 max_energy 0.0
+
+# Whether to validate causality constraints
+bool check_causality true
+
+# Maximum number of paths to return
+uint32 max_paths 3
+
+---
+# Response
+
+# Whether planning succeeded
+bool success
+
+# Number of valid paths found
+uint32 num_paths
+
+# Estimated energy for best path (Joules)
+float64[] path_energies
+
+# Estimated duration for each path (seconds)
+float64[] path_durations
+
+# Risk assessment for each path (0.0-1.0)
+float64[] path_risks
+
+# Path descriptions
+string[] path_descriptions
+
+# Error message if failed
+string error_message
+
+# Causality warnings (if any)
+string[] causality_warnings

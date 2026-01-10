@@ -24,17 +24,20 @@ from timeos.gui.widgets.field_monitor import FieldMonitor
 from timeos.gui.widgets.timeline_view import TimelineView
 from timeos.gui.widgets.event_log import EventLogWidget
 from timeos.gui.widgets.control_panel import ControlPanel
+from timeos.gui.widgets.thermal_panel import ThermalPanel
+from timeos.gui.widgets.data_logger_panel import DataLoggerPanel
 from timeos.gui.models.machine_model import MachineModel
 
 
 class MainWindow(QMainWindow):
     """Main window for TimeOS Control application."""
 
-    def __init__(self, demo: bool = False, parent: QWidget | None = None):
+    def __init__(self, demo: bool = False, emulated: bool = False, parent: QWidget | None = None):
         super().__init__(parent)
 
         self._demo = demo
-        self._model = MachineModel(demo=demo)
+        self._emulated = emulated
+        self._model = MachineModel(demo=demo, emulated=emulated)
 
         self._setup_ui()
         self._setup_menu()
@@ -99,6 +102,13 @@ class MainWindow(QMainWindow):
         # Field monitor
         self._field_monitor = FieldMonitor(self._model)
         layout.addWidget(self._field_monitor)
+
+        # Thermal panel (only in emulated mode)
+        if self._emulated:
+            self._thermal_panel = ThermalPanel()
+            layout.addWidget(self._thermal_panel)
+        else:
+            self._thermal_panel = None
 
         layout.addStretch()
 
@@ -225,6 +235,69 @@ class MainWindow(QMainWindow):
         view_menu.addAction(fullscreen_action)
         self._fullscreen_action = fullscreen_action
 
+        # Hardware menu
+        hardware_menu = menubar.addMenu("&Hardware")
+        self._hardware_menu = hardware_menu
+
+        # Mode indicator (read-only)
+        mode_str = []
+        if self._demo:
+            mode_str.append("Demo")
+        if self._emulated:
+            mode_str.append("Emulated")
+        if not mode_str:
+            mode_str.append("Simulated")
+        mode_label = QAction(f"Mode: {' + '.join(mode_str)}", self)
+        mode_label.setEnabled(False)
+        hardware_menu.addAction(mode_label)
+
+        hardware_menu.addSeparator()
+
+        # Module enable/disable checkboxes
+        self._module_actions = {}
+        module_names = {
+            "field_generator": "Field Generator",
+            "tdu": "Temporal Displacement Unit",
+            "causality": "Causality Monitor",
+            "safety": "Safety Interlocks",
+            "thermal": "Thermal System",
+        }
+        for module_id, display_name in module_names.items():
+            action = QAction(display_name, self)
+            action.setCheckable(True)
+            action.setChecked(self._model.get_module_enabled(module_id))
+            action.setData(module_id)
+            action.triggered.connect(
+                lambda checked, m=module_id: self._on_toggle_module(m, checked)
+            )
+            hardware_menu.addAction(action)
+            self._module_actions[module_id] = action
+
+        hardware_menu.addSeparator()
+
+        # Hardware status
+        hw_status_action = QAction("Show Hardware Status...", self)
+        hw_status_action.triggered.connect(self._on_show_hw_status)
+        hardware_menu.addAction(hw_status_action)
+
+        hardware_menu.addSeparator()
+
+        # HIL Configuration
+        hil_config_action = QAction("HIL Configuration...", self)
+        hil_config_action.triggered.connect(self._on_hil_config)
+        hardware_menu.addAction(hil_config_action)
+
+        # Failure Injection
+        failure_action = QAction("Failure Injection...", self)
+        failure_action.triggered.connect(self._on_failure_injection)
+        failure_action.setEnabled(self._emulated)  # Only in emulated mode
+        hardware_menu.addAction(failure_action)
+
+        # Data Logger
+        data_logger_action = QAction("Data Logger...", self)
+        data_logger_action.triggered.connect(self._on_data_logger)
+        hardware_menu.addAction(data_logger_action)
+
         # Learn menu
         learn_menu = menubar.addMenu("&Learn")
 
@@ -305,6 +378,7 @@ class MainWindow(QMainWindow):
         """Periodic update handler."""
         self._model.update()
         self._update_statusbar()
+        self._update_thermal_panel()
 
     def _update_statusbar(self) -> None:
         """Update status bar values."""
@@ -336,6 +410,36 @@ class MainWindow(QMainWindow):
         else:
             self._anchor_label.setText("ANCHOR: ○ DISCONNECTED")
             self._anchor_label.setStyleSheet("color: #5a5a5a;")
+
+    def _update_thermal_panel(self) -> None:
+        """Update thermal panel with current state."""
+        if not self._thermal_panel:
+            return
+
+        state = self._model.get_state()
+
+        temperature = state.get("temperature_kelvin", 4.2)
+        quench_risk = state.get("quench_risk", 0.0)
+        cooling_state = state.get("cooling_state", "cold")
+        cooling_power = state.get("cooling_power", 0.0)
+
+        # Get sensor readings if available
+        sensors = {
+            "mag_core": state.get("temp_magnet_core", temperature),
+            "cryostat": state.get("temp_cryostat", temperature * 0.95),
+            "shield": state.get("temp_shield", temperature * 1.1),
+            "ambient": state.get("temp_ambient", 293.0),
+        }
+
+        self._thermal_panel.update_thermal(
+            temperature=temperature,
+            quench_risk=quench_risk,
+            cooling_state=cooling_state,
+            cooling_power=cooling_power,
+            target_temp=4.2,
+            critical_temp=9.2,
+            sensors=sensors,
+        )
 
     def _on_state_changed(self) -> None:
         """Handle state change from model."""
@@ -511,6 +615,166 @@ class MainWindow(QMainWindow):
             "<p>Mission Control interface for temporal operations.</p>"
             "<p>&copy; T-Symmetry Labs</p>"
             "<p>Licensed under Apache 2.0</p>",
+        )
+
+    def _on_toggle_module(self, module_id: str, enabled: bool) -> None:
+        """Toggle a hardware module on/off."""
+        self._model.set_module_enabled(module_id, enabled)
+
+    def _on_hil_config(self) -> None:
+        """Open HIL configuration dialog."""
+        from timeos.gui.dialogs.hil_config_dialog import HILConfigDialog
+
+        dialog = HILConfigDialog(self)
+        dialog.config_changed.connect(self._on_hil_config_changed)
+        dialog.exec()
+
+    def _on_hil_config_changed(self, config: dict) -> None:
+        """Handle HIL configuration changes."""
+        # Apply configuration to model/hardware
+        # For now, just show confirmation
+        QMessageBox.information(
+            self,
+            "Configuration Applied",
+            "HIL configuration has been updated.\n"
+            "Some changes may require a restart to take effect.",
+        )
+
+    def _on_failure_injection(self) -> None:
+        """Open failure injection dialog."""
+        from timeos.gui.dialogs.failure_injection_dialog import FailureInjectionDialog
+
+        dialog = FailureInjectionDialog(self)
+        dialog.failure_injected.connect(self._on_failure_injected)
+        dialog.failure_cleared.connect(self._on_failure_cleared)
+        dialog.all_failures_cleared.connect(self._on_all_failures_cleared)
+        dialog.exec()
+
+    def _on_failure_injected(self, name: str, params: dict) -> None:
+        """Handle failure injection."""
+        # Would apply to emulated hardware here
+        self.statusBar().showMessage(f"Failure injected: {name}", 5000)
+
+    def _on_failure_cleared(self, name: str) -> None:
+        """Handle failure cleared."""
+        self.statusBar().showMessage(f"Failure cleared: {name}", 3000)
+
+    def _on_all_failures_cleared(self) -> None:
+        """Handle all failures cleared."""
+        self.statusBar().showMessage("All failures cleared", 3000)
+
+    def _on_data_logger(self) -> None:
+        """Open data logger panel in a dialog."""
+        from PySide6.QtWidgets import QDialog, QVBoxLayout
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Data Logger")
+        dialog.setMinimumSize(400, 500)
+
+        layout = QVBoxLayout(dialog)
+        logger_panel = DataLoggerPanel()
+        layout.addWidget(logger_panel)
+
+        dialog.exec()
+
+    def _on_show_hw_status(self) -> None:
+        """Show detailed hardware status dialog."""
+        from timeos.hardware.tiers import (
+            get_module_spec,
+            get_tier_symbol,
+            get_tier_color,
+            get_overall_buildability,
+            format_cost_range,
+        )
+
+        state = self._model.get_state()
+        statuses = self._model.get_module_statuses()
+
+        # Build status text
+        lines = ["<h3>Hardware Status</h3>"]
+
+        # Mode
+        mode_parts = []
+        if self._model.is_demo:
+            mode_parts.append("Demo")
+        if self._model.is_emulated:
+            mode_parts.append("Emulated")
+        if not mode_parts:
+            mode_parts.append("Simulated")
+        lines.append(f"<p><b>Mode:</b> {' + '.join(mode_parts)}</p>")
+
+        # Overall buildability
+        buildability = get_overall_buildability()
+        lines.append(f"<p><b>System Buildability:</b> {buildability:.0f}%</p>")
+
+        lines.append("<h4>Module Status</h4>")
+        lines.append("<table style='width:100%'>")
+        lines.append("<tr><th>Module</th><th>Status</th><th>Tier</th><th>Build%</th></tr>")
+
+        module_id_map = {
+            "Field Generator": "field_generator",
+            "TDU": "tdu",
+            "Causality Monitor": "causality_monitor",
+            "Anchor": "anchor",
+            "Safety": "safety",
+            "Thermal": "thermal",
+        }
+
+        for name, status in statuses.items():
+            status_color = {
+                "ACTIVE": "#00ff88",
+                "NOMINAL": "#00ff88",
+                "STANDBY": "#ffcc00",
+                "WARNING": "#ff8800",
+                "ERROR": "#ff4444",
+                "OFFLINE": "#888888",
+            }.get(status, "#cccccc")
+
+            # Get tier info
+            module_id = module_id_map.get(name, name.lower().replace(" ", "_"))
+            spec = get_module_spec(module_id)
+            if spec:
+                tier_sym = get_tier_symbol(spec.tier)
+                tier_color = get_tier_color(spec.tier)
+                build_pct = spec.buildability_percent
+            else:
+                tier_sym = "[?]"
+                tier_color = "#888888"
+                build_pct = 0
+
+            lines.append(
+                f"<tr>"
+                f"<td><b>{name}</b></td>"
+                f"<td style='color:{status_color}'>{status}</td>"
+                f"<td style='color:{tier_color}'>{tier_sym}</td>"
+                f"<td>{build_pct}%</td>"
+                f"</tr>"
+            )
+        lines.append("</table>")
+
+        # Tier legend
+        lines.append("<h4>Tier Legend</h4>")
+        lines.append("<p style='font-size:10px'>")
+        lines.append("<span style='color:#00ff88'>[R] Real</span> | ")
+        lines.append("<span style='color:#44aaff'>[P] Proxy</span> | ")
+        lines.append("<span style='color:#888888'>[I] Infrastructure</span> | ")
+        lines.append("<span style='color:#aa88ff'>[A] Abstract</span>")
+        lines.append("</p>")
+
+        # Emulated-specific info
+        if self._model.is_emulated:
+            lines.append("<h4>Emulated Hardware</h4><ul>")
+            lines.append(f"<li>Field: {state.get('field_strength', 0):.2f} T</li>")
+            lines.append(f"<li>Temperature: {state.get('temperature_kelvin', 0):.2f} K</li>")
+            lines.append(f"<li>Quench Risk: {state.get('quench_risk', 0) * 100:.1f}%</li>")
+            lines.append(f"<li>Machine State: {state.get('machine_state', 'unknown')}</li>")
+            lines.append(f"<li>Ramp State: {state.get('ramp_state', 'unknown')}</li>")
+            lines.append("</ul>")
+
+        QMessageBox.information(
+            self,
+            "Hardware Status",
+            "".join(lines)
         )
 
     def _save_settings(self) -> None:

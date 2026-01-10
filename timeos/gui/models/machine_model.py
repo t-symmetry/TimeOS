@@ -75,6 +75,15 @@ class MachineModel(QObject):
         self._velocity_beta = 0.0  # v/c (fraction of light speed)
         self._proper_time = 0.0    # τ (proper time accumulated)
 
+        # Module enable states (for Hardware menu)
+        self._modules_enabled = {
+            "field_generator": True,
+            "tdu": True,
+            "causality": True,
+            "safety": True,
+            "thermal": True,
+        }
+
     def initialize(self) -> bool:
         """Initialize the time machine.
 
@@ -112,7 +121,11 @@ class MachineModel(QObject):
         return success
 
     def _initialize_emulated(self) -> bool:
-        """Initialize with EmulatedTimeMachine."""
+        """Initialize with EmulatedTimeMachine.
+
+        When demo mode is also enabled, creates a SimulatedTimeMachine
+        for timeline data alongside the emulated hardware.
+        """
         config = MachineConfig(
             max_field_tesla=10.0,
             field_ramp_rate_tesla_per_second=0.1,
@@ -128,7 +141,16 @@ class MachineModel(QObject):
 
         if success:
             self._initialized = True
-            self._log_event("System initialized (emulated hardware mode)")
+            mode_str = "emulated hardware"
+
+            # If demo mode, also create SimulatedTimeMachine for timeline data
+            if self._demo:
+                self._machine = SimulatedTimeMachine()
+                self._machine.initialize()
+                self._machine.set_anchor()
+                mode_str = "emulated hardware + demo timeline"
+
+            self._log_event(f"System initialized ({mode_str})")
 
             # Start background update loop
             self._emulated_machine.start()
@@ -144,7 +166,7 @@ class MachineModel(QObject):
 
             self._log_event("Emulated hardware online")
 
-            # Start demo mode if enabled
+            # Start demo mode if enabled (now with timeline data)
             if self._demo:
                 self._start_emulated_demo()
 
@@ -168,12 +190,33 @@ class MachineModel(QObject):
             self.state_changed.emit()
 
     def _start_emulated_demo(self) -> None:
-        """Start demo mode for emulated machine."""
-        self._log_event("Demo mode activated (emulated)")
+        """Start demo mode for emulated machine.
+
+        Creates demo timeline data AND shows emulated hardware behavior.
+        """
+        self._log_event("Demo mode activated (emulated hardware + timeline)")
         self._demo_time = 0.0
         self._demo_tick_count = 0
+        self._demo_branches_created = False
 
-        # Ramp up the field to show hardware behavior
+        # Generate demo timeline events if we have a timeline
+        if self._machine:
+            demo_events = [
+                "Calibration sequence initiated",
+                "Temporal field stabilized",
+                "Causality monitor online",
+                "Ready for operations",
+            ]
+            for msg in demo_events:
+                self._log_event(msg)
+
+            timeline = self._machine.timeline
+            timeline.set_author("demo")
+            for i, msg in enumerate(demo_events):
+                stamp = ChronoStamp(frame_id="origin", t=float(i) * 0.5)
+                timeline.create_event(stamp, event_type="system", payload=msg.encode())
+
+        # Ramp up the field to show emulated hardware behavior
         if self._emulated_machine:
             self._emulated_machine.set_field(5.0)
             self._log_event("Field ramp initiated: target 5.0 T")
@@ -181,32 +224,62 @@ class MachineModel(QObject):
         # Start demo timer for periodic activity
         self._demo_timer = QTimer(self)
         self._demo_timer.timeout.connect(self._emulated_demo_tick)
-        self._demo_timer.start(3000)  # Every 3 seconds
+        self._demo_timer.start(2000)  # Every 2 seconds (match simulated demo)
 
     def _emulated_demo_tick(self) -> None:
-        """Demo mode periodic update for emulated machine."""
+        """Demo mode periodic update for emulated machine.
+
+        Updates both emulated hardware and demo timeline.
+        """
+        dt_coord = 2.0  # Coordinate time step matches timer interval
+        self._demo_time += dt_coord
         self._demo_tick_count += 1
-        self._demo_time += 3.0
 
-        if not self._emulated_machine:
-            return
-
-        # Get current status
-        status = self._emulated_machine.get_status()
-
-        # Simulate relativistic motion
+        # Simulate relativistic motion - velocity varies over time
         self._velocity_beta = 0.4 + 0.4 * math.sin(self._demo_tick_count * 0.3)
         if self._velocity_beta < 1.0:
             gamma = lorentz_factor(self._velocity_beta)
-            self._proper_time += 3.0 / gamma
+            self._proper_time += dt_coord / gamma
 
-        # Log some status updates
-        if self._demo_tick_count % 3 == 0:
+        # Create demo branches after a few ticks (if timeline available)
+        if not self._demo_branches_created and self._demo_tick_count >= 3 and self._machine:
+            self._create_demo_branches()
+            self._demo_branches_created = True
+
+        # Log emulated hardware status periodically
+        if self._emulated_machine and self._demo_tick_count % 3 == 0:
+            status = self._emulated_machine.get_status()
             field_tesla = status["field"]["field_tesla"]
             temp = status["thermal"]["temperature_kelvin"]
-            self._log_event(
-                f"Status: B={field_tesla:.2f}T, T={temp:.2f}K"
-            )
+            self._log_event(f"Hardware: B={field_tesla:.2f}T, T={temp:.2f}K")
+
+        # Randomly generate timeline events (if timeline available)
+        if self._machine and random.random() < 0.4:
+            demo_messages = [
+                ("Temporal flux detected", "observation"),
+                ("Field strength nominal", "status"),
+                ("Causality check passed", "verification"),
+                ("Timeline stable", "status"),
+                ("Anchor signal strong", "status"),
+                ("Minor quantum fluctuation", "anomaly"),
+                ("Synchronization complete", "system"),
+            ]
+            msg, event_type = random.choice(demo_messages)
+            self._log_event(msg)
+
+            timeline = self._machine.timeline
+            branches = timeline.list_branches()
+            branch = random.choice(branches)
+            stamp = ChronoStamp(frame_id="origin", t=self._demo_time)
+            try:
+                timeline.create_event(
+                    stamp,
+                    event_type=event_type,
+                    payload=msg.encode(),
+                    branch_id=branch.branch_id
+                )
+            except Exception:
+                pass
 
         self.state_changed.emit()
 
@@ -877,3 +950,50 @@ class MachineModel(QObject):
         }
         self._event_log.append(event)
         self.event_logged.emit(event)
+
+    # Module enable/disable controls for Hardware menu
+
+    def get_module_enabled(self, module: str) -> bool:
+        """Get whether a module is enabled.
+
+        Args:
+            module: Module name (field_generator, tdu, causality, safety, thermal).
+
+        Returns:
+            True if enabled.
+        """
+        return self._modules_enabled.get(module, False)
+
+    def set_module_enabled(self, module: str, enabled: bool) -> None:
+        """Enable or disable a module.
+
+        Args:
+            module: Module name.
+            enabled: True to enable.
+        """
+        if module in self._modules_enabled:
+            old = self._modules_enabled[module]
+            self._modules_enabled[module] = enabled
+            if old != enabled:
+                action = "enabled" if enabled else "disabled"
+                self._log_event(f"Module {module} {action}")
+                self.module_status_changed.emit(module, action)
+                self.state_changed.emit()
+
+    def get_available_modules(self) -> list[str]:
+        """Get list of available module names.
+
+        Returns:
+            List of module names that can be enabled/disabled.
+        """
+        return list(self._modules_enabled.keys())
+
+    @property
+    def is_emulated(self) -> bool:
+        """Return True if running in emulated hardware mode."""
+        return self._emulated_machine is not None
+
+    @property
+    def is_demo(self) -> bool:
+        """Return True if running in demo mode."""
+        return self._demo

@@ -240,7 +240,7 @@ class FieldGeneratorNode(NodeBase):
         # Configure and ramp to target
         if tesla > 0:
             config = FieldConfiguration(
-                field_type=FieldType.STATIC,
+                field_type=FieldType.STATIC_MAGNETIC,
                 geometry=FieldGeometry.SOLENOID,
                 b_field_tesla=tesla,
                 direction=Vector3(0, 0, 1),
@@ -893,7 +893,9 @@ class EmulatedTimeMachine:
         if not self._safety_node.is_safe_to_operate():
             return False
 
-        if not self._field_node.get_generator().is_active():
+        # Check if field generator is active via get_field_state()
+        field_state = self._field_node.get_generator().get_field_state()
+        if not field_state.active and tesla > 0:
             self._field_node.activate()
 
         return self._field_node.set_target_field(tesla)

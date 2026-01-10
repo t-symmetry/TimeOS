@@ -6,11 +6,12 @@ import sys
 from pathlib import Path
 
 
-def launch(demo: bool = False) -> int:
+def launch(demo: bool = False, emulated: bool = False) -> int:
     """Launch the TimeOS GUI application.
 
     Args:
         demo: If True, launch with demo data.
+        emulated: If True, use emulated hardware modules.
 
     Returns:
         Exit code.
@@ -47,7 +48,7 @@ def launch(demo: bool = False) -> int:
     app.setStyleSheet(stylesheet)
 
     # Create and show main window
-    window = MainWindow(demo=demo)
+    window = MainWindow(demo=demo, emulated=emulated)
     window.show()
 
     return app.exec()

@@ -9,6 +9,8 @@ from timeos.gui.widgets.field_monitor import FieldMonitor
 from timeos.gui.widgets.timeline_view import TimelineView
 from timeos.gui.widgets.event_log import EventLogWidget
 from timeos.gui.widgets.control_panel import ControlPanel
+from timeos.gui.widgets.thermal_panel import ThermalPanel
+from timeos.gui.widgets.data_logger_panel import DataLoggerPanel
 
 __all__ = [
     "StatusPanel",
@@ -17,4 +19,6 @@ __all__ = [
     "TimelineView",
     "EventLogWidget",
     "ControlPanel",
+    "ThermalPanel",
+    "DataLoggerPanel",
 ]

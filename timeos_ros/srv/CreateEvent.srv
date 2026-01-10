@@ -1,0 +1,42 @@
+# CreateEvent.srv - Create a new timeline event
+#
+# Request to create and record a new event in the timeline.
+
+# Event type: "observation", "actuation", "annotation", etc.
+string event_type
+
+# Reference frame for the timestamp
+string frame_id
+
+# Time coordinate in the reference frame
+float64 t
+
+# Time uncertainty +/- seconds
+float64 t_uncertainty 0.0
+
+# Event payload (serialized data)
+uint8[] payload
+
+# Payload schema reference
+string payload_schema
+
+# Parent event IDs (causal dependencies)
+string[] parents
+
+# Target branch (empty = current active branch)
+string branch_id
+
+---
+# Response
+
+# Whether event was successfully created
+bool success
+
+# Created event ID (UUID)
+string event_id
+
+# Error message if failed
+string error_message
+
+# Sequence number assigned
+uint64 seq
