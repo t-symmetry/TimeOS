@@ -14,6 +14,8 @@ def launch(demo: bool = False, emulated: bool = False, ros2: bool = False) -> in
         emulated: If True, use emulated hardware modules.
         ros2: If True, use ROS2 for all hardware communication.
 
+    If no mode flags are set, shows a mode selector dialog.
+
     Returns:
         Exit code.
     """
@@ -47,6 +49,16 @@ def launch(demo: bool = False, emulated: bool = False, ros2: bool = False) -> in
     # Load stylesheet
     stylesheet = load_stylesheet()
     app.setStyleSheet(stylesheet)
+
+    # If no mode specified, show mode selector
+    if not any([demo, emulated, ros2]):
+        from timeos.gui.dialogs.mode_selector import ModeSelector
+
+        selector = ModeSelector()
+        if selector.exec() != ModeSelector.DialogCode.Accepted:
+            return 0  # User cancelled
+
+        demo, emulated, ros2 = selector.get_mode()
 
     # Create and show main window
     window = MainWindow(demo=demo, emulated=emulated, ros2=ros2)

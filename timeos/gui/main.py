@@ -269,17 +269,20 @@ class MainWindow(QMainWindow):
         hardware_menu = menubar.addMenu("&Hardware")
         self._hardware_menu = hardware_menu
 
-        # Mode indicator (read-only)
+        # Mode indicator and switch
         mode_str = []
-        if self._demo:
-            mode_str.append("Demo")
+        if self._ros2:
+            mode_str.append("ROS2")
         if self._emulated:
             mode_str.append("Emulated")
+        if self._demo:
+            mode_str.append("Demo")
         if not mode_str:
-            mode_str.append("Simulated")
-        mode_label = QAction(f"Mode: {' + '.join(mode_str)}", self)
-        mode_label.setEnabled(False)
-        hardware_menu.addAction(mode_label)
+            mode_str.append("Normal")
+
+        switch_mode_action = QAction(f"Mode: {' + '.join(mode_str)}  (click to switch)", self)
+        switch_mode_action.triggered.connect(self._on_switch_mode)
+        hardware_menu.addAction(switch_mode_action)
 
         hardware_menu.addSeparator()
 
@@ -690,6 +693,53 @@ class MainWindow(QMainWindow):
     def _on_toggle_module(self, module_id: str, enabled: bool) -> None:
         """Toggle a hardware module on/off."""
         self._model.set_module_enabled(module_id, enabled)
+
+    def _on_switch_mode(self) -> None:
+        """Switch operating mode."""
+        from timeos.gui.dialogs.mode_selector import ModeSelector
+
+        selector = ModeSelector(self)
+        if selector.exec() != ModeSelector.DialogCode.Accepted:
+            return
+
+        new_demo, new_emulated, new_ros2 = selector.get_mode()
+
+        # Check if mode actually changed
+        if (new_demo == self._demo and
+            new_emulated == self._emulated and
+            new_ros2 == self._ros2):
+            return  # No change
+
+        # Confirm restart
+        reply = QMessageBox.question(
+            self,
+            "Switch Mode",
+            f"Switch to {selector.get_mode_name().title()} mode?\n\n"
+            "This will restart the application.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        # Restart with new mode
+        import sys
+        import os
+
+        # Build new command
+        args = [sys.executable, "-m", "timeos", "gui"]
+        if new_demo:
+            args.append("--demo")
+        if new_emulated:
+            args.append("--emulated")
+        if new_ros2:
+            args.append("--ros2")
+
+        # Close current window
+        self.close()
+
+        # Start new process
+        os.execv(sys.executable, args)
 
     def _on_hil_config(self) -> None:
         """Open HIL configuration dialog."""
