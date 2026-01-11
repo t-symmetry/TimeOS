@@ -15,6 +15,7 @@ You're not simulating physics. You're simulating the **operational consequences 
 - **Speculative execution** — run ahead, validate later
 - **Fault tolerance** — graceful degradation under paradox
 - **Provenance tracking** — every event has a causal history
+- **Temporal precision** — uncertainty-aware timestamps with multi-clock fusion
 
 All wearing a time-travel costume. Which is the best costume possible.
 
@@ -23,7 +24,9 @@ All wearing a time-travel costume. Which is the best costume possible.
 TimeOS provides infrastructure for working with non-monotonic timelines, event provenance, and causal consistency. Think: Git for physics experiments, ROS for spacetime.
 
 **Useful today for:**
-- Multi-clock synchronization (GPS, TAI, NTP, proper time)
+- Multi-clock synchronization (GPS, PTP, NTP, TAI, proper time)
+- Uncertainty-aware temporal data with rigorous error propagation
+- Stream correlation and alignment across clock domains
 - Distributed systems with explicit causality
 - Simulation with branching timelines
 - Scientific reproducibility with provenance tracking
@@ -119,6 +122,15 @@ timeos validate
 # Export/import
 timeos export backup.json
 timeos import backup.json
+
+# Clock management
+timeos clock status          # Show all clock sources
+timeos clock now             # Current time from best source
+timeos clock drift --duration 60  # Measure drift
+
+# Stream correlation
+timeos correlate stream1.csv stream2.csv -o aligned.csv
+timeos resample data.csv -o uniform.csv --rate 100
 ```
 
 ## Architecture
@@ -132,7 +144,7 @@ timeos/                        # Python package
 │   ├── temporal_frame.py     # Coordinate frames
 │   └── timeline_event.py     # Event envelopes
 ├── core/
-│   ├── event_log.py          # Append-only storage
+│   ├── event_log.py          # Append-only storage (uncertainty-aware queries)
 │   ├── timeline.py           # Branch management
 │   ├── constraints.py        # Causality checking (inspectable)
 │   └── annotations.py        # Narrative layer
@@ -141,6 +153,34 @@ timeos/                        # Python package
 │   ├── lorentz.py            # Lorentz transformations
 │   ├── frames.py             # Reference frame management
 │   └── causality.py          # Light cones, causal ordering
+├── clocks/                    # Clock sources with uncertainty
+│   ├── base.py               # ClockSource interface, ClockQuality
+│   ├── system.py             # CLOCK_MONOTONIC, CLOCK_REALTIME, CLOCK_TAI
+│   ├── ntp.py                # NTP/chrony integration
+│   ├── ptp.py                # IEEE 1588 PTP (linuxptp)
+│   ├── gps.py                # gpsd + PPS discipline
+│   └── composite.py          # Multi-source Kalman filter fusion
+├── uncertainty/               # Rigorous error mathematics
+│   ├── models.py             # Drift models (linear, random walk)
+│   ├── propagation.py        # Uncertainty through transformations
+│   ├── allan.py              # Allan variance/deviation
+│   └── confidence.py         # Confidence intervals
+├── correlation/               # Stream alignment
+│   ├── align.py              # Cross-correlation alignment
+│   ├── interpolate.py        # Uncertainty-aware interpolation
+│   ├── resample.py           # Time base conversion
+│   └── sync.py               # Clock synchronization detection
+├── formats/                   # Standard time formats
+│   ├── iso8601.py            # ISO 8601 with uncertainty extensions
+│   ├── smpte.py              # SMPTE 12M timecode
+│   ├── prov.py               # W3C PROV-O provenance ontology
+│   ├── hdf5_time.py          # HDF5 temporal metadata (CF conventions)
+│   └── influx.py             # InfluxDB line protocol
+├── connectors/                # External system integration
+│   ├── timescale.py          # TimescaleDB hypertables
+│   ├── influxdb.py           # InfluxDB 2.x client
+│   ├── kafka.py              # Kafka timestamp handling
+│   └── ros2_time.py          # ROS2 Time/Duration bridging
 ├── hardware/                  # Hardware abstraction
 │   ├── base.py               # Module interfaces
 │   ├── field_generator.py    # Field control
@@ -157,8 +197,8 @@ timeos/                        # Python package
 │   ├── ros2/                 # ROS2 integration
 │   │   ├── ros2_bridge.py    # Subprocess-based ROS2 interface
 │   │   └── ros2_manager_dialog.py  # Node/topic/service management
-│   ├── widgets/              # Status, position, timeline
-│   └── dialogs/              # Displacement, events, annotations
+│   ├── widgets/              # Status, position, timeline, drift plot
+│   └── dialogs/              # Displacement, correlation, annotations
 ├── paradoxes/                 # Educational demos
 │   ├── scenarios.py          # Classic paradoxes
 │   └── walkthrough.py        # Guided tutorials
@@ -180,7 +220,7 @@ A timestamp with explicit uncertainty and provenance:
 - `frame_id`: Reference frame (e.g., "earth_tai", "spacecraft_proper")
 - `t`: Time coordinate
 - `t_uncertainty`: Error bounds
-- `clock_class`: Source type ("atomic", "gps", "sim", etc.)
+- `clock_class`: Source type ("atomic", "gps", "ptp", "ntp", etc.)
 
 ### TimelineEvent
 Universal envelope for any temporal event:
@@ -191,11 +231,11 @@ Universal envelope for any temporal event:
 
 ### Constraints (Inspectable)
 Built-in causality checks with detailed inspection:
-- **NoSelfCausation**: No causal loops — `✔ Checked 5 ancestors`
-- **CausalOrderConstraint**: Parents must precede children — `✔ Δt = +0.23s`
-- **LightConeConstraint**: Relativistic causality — `✔ Timelike (Δt = +1.5s)`
-- **BranchConsistency**: Cross-branch references require merges — `⏳ Deferred to branch`
-- **ConservationConstraint**: Energy/momentum (soft) — `⏳ Deferred (no data)`
+- **NoSelfCausation**: No causal loops — `Checked 5 ancestors`
+- **CausalOrderConstraint**: Parents must precede children — `dt = +0.23s`
+- **LightConeConstraint**: Relativistic causality — `Timelike (dt = +1.5s)`
+- **BranchConsistency**: Cross-branch references require merges — `Deferred to branch`
+- **ConservationConstraint**: Energy/momentum (soft) — `Deferred (no data)`
 
 ### Soft Paradoxes
 Risk thresholds that make E-STOP meaningful:
@@ -215,6 +255,131 @@ note = Annotation.create(
     annotation_type=AnnotationType.HYPOTHESIS,
     tags=["field", "anomaly"]
 )
+```
+
+## Temporal Precision Toolkit
+
+TimeOS includes comprehensive tools for working with real-world temporal data.
+
+### Clock Sources
+
+Multiple clock source integrations with quality tracking:
+
+```python
+from timeos.clocks import SystemClock, NTPClock, GPSClock, PTPClock, CompositeClock
+
+# System clocks
+sys_clock = SystemClock(clock_type="monotonic")  # or "realtime", "tai"
+
+# NTP/chrony integration
+ntp_clock = NTPClock()
+offset, uncertainty = ntp_clock.get_offset()
+
+# GPS with PPS discipline
+gps_clock = GPSClock(gpsd_host="localhost")
+
+# IEEE 1588 PTP
+ptp_clock = PTPClock(interface="eth0")
+
+# Multi-source fusion with automatic failover
+composite = CompositeClock()
+composite.add_source(gps_clock, priority=1)
+composite.add_source(ptp_clock, priority=2)
+composite.add_source(ntp_clock, priority=3)
+stamp = composite.now()  # Best available time with uncertainty
+```
+
+### Uncertainty Mathematics
+
+Rigorous error propagation and clock stability analysis:
+
+```python
+from timeos.uncertainty import (
+    DriftModel, RandomWalkModel,
+    propagate_uncertainty, combine_uncertainties,
+    allan_deviation
+)
+
+# Clock drift modeling
+drift = DriftModel(offset=1e-6, drift_rate=1e-9)
+uncertainty_after_1h = drift.uncertainty_at(3600)
+
+# Allan deviation for stability analysis
+taus, adevs = allan_deviation(phase_data, rate=1.0)
+```
+
+### Stream Correlation
+
+Align data streams from different clock domains:
+
+```python
+from timeos.correlation import find_offset, align_streams, resample_to_rate
+from timeos.correlation.align import TimeSeries
+
+# Find optimal time offset between streams
+series1 = TimeSeries(times=times1, values=values1)
+series2 = TimeSeries(times=times2, values=values2)
+
+result = find_offset(series1, series2, max_offset=1.0)
+print(f"Offset: {result.offset:.6f}s +/- {result.offset_uncertainty:.6f}s")
+print(f"Correlation: {result.correlation:.4f}")
+
+# Align and resample to common time base
+_, aligned = align_streams(series1, series2, result)
+resampled = resample_to_rate(aligned, target_rate=100.0)
+```
+
+### Standard Formats
+
+Import/export in industry-standard formats:
+
+```python
+from timeos.formats import (
+    parse_iso8601_uncertain, format_iso8601_uncertain,
+    parse_smpte_timecode, format_smpte_timecode,
+    export_prov_turtle, export_prov_jsonld,
+    to_influx_line
+)
+
+# ISO 8601 with uncertainty
+stamp = parse_iso8601_uncertain("2024-01-15T10:30:00.000+/-0.001Z")
+formatted = format_iso8601_uncertain(stamp)  # "2024-01-15T10:30:00.000+/-0.001Z"
+
+# SMPTE timecode (film/broadcast)
+tc = parse_smpte_timecode("01:23:45:12", fps=24)
+
+# W3C PROV-O provenance
+turtle = export_prov_turtle(timeline)
+
+# InfluxDB line protocol
+line = to_influx_line(event, measurement="timeline_events")
+```
+
+### External Connectors
+
+Integration with time-series databases and message systems:
+
+```python
+from timeos.connectors import (
+    TimescaleDBConnector,
+    InfluxDBConnector,
+    KafkaTimestampHandler,
+    ROS2TimeBridge
+)
+
+# TimescaleDB hypertables
+ts = TimescaleDBConnector(connection_string)
+ts.create_hypertable("events", "stamp_t")
+ts.insert_event(event)
+
+# InfluxDB with uncertainty as tags
+influx = InfluxDBConnector(url, token, org, bucket)
+influx.write_event(event)
+
+# ROS2 Time bridging (without rclpy dependency)
+bridge = ROS2TimeBridge()
+chrono = bridge.ros2_to_chrono(ros_time, uncertainty=1e-6)
+ros_time = bridge.chrono_to_ros2(chrono)
 ```
 
 ## GUI - Mission Control
@@ -240,12 +405,15 @@ timeos gui --ros2       # ROS2 mode (connects to ROS2 nodes)
 
 ### Features
 - Real-time system status with LED indicators
-- Timeline visualization with branch support
-- Relativistic quantities display (γ, τ, β)
+- Timeline visualization with uncertainty bands
+- Clock status panel with quality indicators
+- Drift plot for multi-source clock visualization
+- Correlation dialog for interactive stream alignment
+- Relativistic quantities display (gamma, tau, beta)
 - Displacement planning with energy calculations
 - Event details with inspectable constraint checks
 - Paradox risk assessment
-- ROS2 node management dialog (Hardware → ROS2 Management)
+- ROS2 node management dialog (Hardware -> ROS2 Management)
 - Hardware-in-the-loop configuration
 
 ## Physics Layer
@@ -354,7 +522,7 @@ The emulated mode (`--emulated`) provides hardware-accurate simulation:
 Built-in failure scenarios for testing:
 ```bash
 timeos gui --emulated
-# Hardware → Failure Injection...
+# Hardware -> Failure Injection...
 ```
 
 Available failures: power fluctuation, thermal spike, sensor drift, communication timeout, field collapse, and more.
@@ -372,7 +540,7 @@ TimeOS supports mixing real and emulated hardware:
 
 ```bash
 timeos gui --emulated
-# Hardware → HIL Configuration...
+# Hardware -> HIL Configuration...
 ```
 
 Select which modules use real vs. emulated drivers per-component.
