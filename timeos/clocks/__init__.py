@@ -37,6 +37,7 @@ from timeos.clocks.system import (
 from timeos.clocks.ntp import NTPClock
 from timeos.clocks.ptp import PTPClock, SimulatedPTPClock
 from timeos.clocks.gps import GPSClock, SimulatedGPSClock
+from timeos.clocks.composite import CompositeClock, SimulatedCompositeClock, FusionMethod
 
 __all__ = [
     # Base classes
@@ -60,4 +61,8 @@ __all__ = [
     # GPS
     "GPSClock",
     "SimulatedGPSClock",
+    # Composite
+    "CompositeClock",
+    "SimulatedCompositeClock",
+    "FusionMethod",
 ]

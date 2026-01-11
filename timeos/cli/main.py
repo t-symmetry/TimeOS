@@ -996,6 +996,97 @@ def correlate_cmd(
         click.echo(f"\nAligned data written to: {output}")
 
 
+@cli.command("resample")
+@click.argument("input_file", type=click.Path(exists=True))
+@click.option("--output", "-o", type=click.Path(), required=True, help="Output file path.")
+@click.option("--rate", "-r", type=float, required=True, help="Target sample rate in Hz.")
+@click.option("--time-col", default="time", help="Column name for timestamps.")
+@click.option("--value-col", default="value", help="Column name for values.")
+@click.option("--method", type=click.Choice(["linear", "nearest", "cubic"]),
+              default="linear", help="Interpolation method.")
+def resample_cmd(
+    input_file: str,
+    output: str,
+    rate: float,
+    time_col: str,
+    value_col: str,
+    method: str,
+) -> None:
+    """Resample time series data to a uniform rate.
+
+    Converts data to a specified sample rate with uncertainty-aware
+    interpolation.
+
+    Example:
+        timeos resample data.csv -o resampled.csv -r 100
+    """
+    import csv
+
+    def load_csv(path: str) -> tuple[list[float], list[float]]:
+        """Load time/value pairs from CSV."""
+        times = []
+        values = []
+        with open(path, newline='') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    times.append(float(row[time_col]))
+                    values.append(float(row[value_col]))
+                except (KeyError, ValueError):
+                    continue
+        return times, values
+
+    try:
+        from timeos.correlation import resample_to_rate, InterpolationMethod
+        from timeos.correlation.align import TimeSeries
+    except ImportError as e:
+        click.echo(f"Error loading correlation module: {e}")
+        sys.exit(1)
+
+    # Map method string to enum
+    method_map = {
+        "linear": InterpolationMethod.LINEAR,
+        "nearest": InterpolationMethod.NEAREST,
+        "cubic": InterpolationMethod.CUBIC,
+    }
+    interp_method = method_map.get(method, InterpolationMethod.LINEAR)
+
+    # Load data
+    click.echo(f"Loading {input_file}...")
+    times, values = load_csv(input_file)
+    click.echo(f"  {len(times)} samples")
+
+    if not times:
+        click.echo("Error: No valid data found in file.")
+        sys.exit(1)
+
+    # Calculate input stats
+    t_min, t_max = min(times), max(times)
+    duration = t_max - t_min
+    input_rate = len(times) / duration if duration > 0 else 0
+
+    click.echo(f"  Duration: {duration:.3f}s")
+    click.echo(f"  Input rate: {input_rate:.1f} Hz")
+
+    # Create time series
+    series = TimeSeries(times=times, values=values)
+
+    # Resample
+    click.echo(f"Resampling to {rate} Hz...")
+    resampled = resample_to_rate(series, target_rate=rate, method=interp_method)
+
+    click.echo(f"  Output samples: {len(resampled.times)}")
+
+    # Write output
+    with open(output, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([time_col, value_col])
+        for t, v in zip(resampled.times, resampled.values):
+            writer.writerow([t, v])
+
+    click.echo(f"\nResampled data written to: {output}")
+
+
 # =============================================================================
 # Export Commands
 # =============================================================================
