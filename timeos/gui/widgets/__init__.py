@@ -12,6 +12,7 @@ from timeos.gui.widgets.control_panel import ControlPanel
 from timeos.gui.widgets.thermal_panel import ThermalPanel
 from timeos.gui.widgets.data_logger_panel import DataLoggerPanel
 from timeos.gui.widgets.clock_status_panel import ClockStatusPanel
+from timeos.gui.widgets.drift_plot import DriftPlot, DriftPlotWidget
 
 __all__ = [
     "StatusPanel",
@@ -23,4 +24,6 @@ __all__ = [
     "ThermalPanel",
     "DataLoggerPanel",
     "ClockStatusPanel",
+    "DriftPlot",
+    "DriftPlotWidget",
 ]

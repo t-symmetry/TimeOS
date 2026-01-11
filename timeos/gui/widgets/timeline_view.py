@@ -1,8 +1,15 @@
-"""Timeline View Widget - Visual timeline with events and branches."""
+"""Timeline View Widget - Visual timeline with events and branches.
+
+Features:
+- Event markers on branching timeline
+- Uncertainty bands showing temporal uncertainty for each event
+- Interactive zoom, pan, and event selection
+"""
 
 from __future__ import annotations
 
 import pyqtgraph as pg
+import numpy as np
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -10,15 +17,19 @@ from PySide6.QtWidgets import (
     QLabel,
     QGroupBox,
     QPushButton,
+    QCheckBox,
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QPainter
 
 from timeos.gui.models.machine_model import MachineModel
 
 
 # Configure pyqtgraph for dark theme
 pg.setConfigOptions(antialias=True, background='#0d0d0d', foreground='#808080')
+
+# Uncertainty band color (semi-transparent version of event color)
+UNCERTAINTY_ALPHA = 50  # 0-255
 
 # Branch colors for visualization
 BRANCH_COLORS = [
@@ -32,7 +43,11 @@ BRANCH_COLORS = [
 
 
 class TimelinePlot(pg.PlotWidget):
-    """PyQtGraph-based timeline visualization with branch support."""
+    """PyQtGraph-based timeline visualization with branch support.
+
+    Features uncertainty bands that show the temporal uncertainty
+    for each event as a shaded region around the event marker.
+    """
 
     event_clicked = Signal(dict)  # Emitted when an event is clicked
 
@@ -45,6 +60,8 @@ class TimelinePlot(pg.PlotWidget):
         self._current_time = 0.0
         self._anchor_time: float | None = 0.0
         self._branch_y_positions: dict[str, float] = {"main": 0.0}
+        self._show_uncertainty = True  # Toggle for uncertainty bands
+        self._uncertainty_items: list[pg.QtWidgets.QGraphicsRectItem] = []
 
         self._setup_plot()
         self._create_items()
@@ -105,6 +122,16 @@ class TimelinePlot(pg.PlotWidget):
             brush=pg.mkBrush('#00ff88')
         )
         self.addItem(self._current_marker)
+
+        # Uncertainty error bars (horizontal bars showing ±uncertainty)
+        self._uncertainty_bars = pg.ErrorBarItem(
+            x=np.array([]),
+            y=np.array([]),
+            width=np.array([]),
+            pen=pg.mkPen('#404040', width=2),
+            beam=0.0,  # No vertical caps
+        )
+        self.addItem(self._uncertainty_bars)
 
         # Event markers (will be set per branch)
         self._event_markers = pg.ScatterPlotItem(
@@ -232,13 +259,33 @@ class TimelinePlot(pg.PlotWidget):
             self._anchor_marker.setData([], [])
             self._anchor_label.setVisible(False)
 
+    def set_uncertainty_visible(self, visible: bool) -> None:
+        """Toggle uncertainty band visibility.
+
+        Args:
+            visible: Whether to show uncertainty bands
+        """
+        self._show_uncertainty = visible
+        self._uncertainty_bars.setVisible(visible)
+        # Re-render with current events
+        if self._events:
+            self.set_events(self._events)
+
     def set_events(self, events: list[dict]) -> None:
-        """Update event markers with branch positioning."""
+        """Update event markers with branch positioning and uncertainty bands.
+
+        Events should have:
+        - time: Event timestamp
+        - branch_id: Branch identifier (default: "main")
+        - uncertainty: Optional time uncertainty in seconds
+        - t_uncertainty: Alternative key for uncertainty
+        """
         self._events = events
         if events:
             times = []
             ys = []
             colors = []
+            uncertainties = []
 
             for e in events:
                 times.append(e.get("time", 0.0))
@@ -246,6 +293,10 @@ class TimelinePlot(pg.PlotWidget):
                 y = self._branch_y_positions.get(branch_id, 0.0)
                 ys.append(y)
                 colors.append(self._get_branch_color(branch_id))
+
+                # Get uncertainty (check multiple possible keys)
+                uncertainty = e.get("uncertainty", e.get("t_uncertainty", 0.0))
+                uncertainties.append(uncertainty if uncertainty else 0.0)
 
             # Create colored brushes for each event
             brushes = [pg.mkBrush(c) for c in colors]
@@ -256,8 +307,41 @@ class TimelinePlot(pg.PlotWidget):
                 brush=brushes,
                 pen=pens
             )
+
+            # Update uncertainty bars if enabled
+            if self._show_uncertainty and any(u > 0 for u in uncertainties):
+                times_arr = np.array(times)
+                ys_arr = np.array(ys)
+                # Width is 2x uncertainty (±)
+                widths = np.array([u * 2 for u in uncertainties])
+
+                # Create color-matched pens for error bars
+                # Use semi-transparent version of branch colors
+                error_pens = []
+                for color in colors:
+                    qcolor = QColor(color)
+                    qcolor.setAlpha(150)
+                    error_pens.append(pg.mkPen(qcolor, width=3))
+
+                self._uncertainty_bars.setData(
+                    x=times_arr,
+                    y=ys_arr,
+                    width=widths,
+                )
+                self._uncertainty_bars.setVisible(True)
+            else:
+                self._uncertainty_bars.setData(
+                    x=np.array([]),
+                    y=np.array([]),
+                    width=np.array([]),
+                )
         else:
             self._event_markers.setData([], [])
+            self._uncertainty_bars.setData(
+                x=np.array([]),
+                y=np.array([]),
+                width=np.array([]),
+            )
 
     def set_view_range(self, start: float, end: float) -> None:
         """Set visible time range."""
@@ -338,6 +422,13 @@ class TimelineView(QGroupBox):
         self._follow_btn.setToolTip("Auto-follow current time")
         self._follow_btn.toggled.connect(self._toggle_follow)
         control_layout.addWidget(self._follow_btn)
+
+        # Uncertainty bands toggle
+        self._uncertainty_cb = QCheckBox("±σ")
+        self._uncertainty_cb.setChecked(True)
+        self._uncertainty_cb.setToolTip("Show uncertainty bands around events")
+        self._uncertainty_cb.toggled.connect(self._toggle_uncertainty)
+        control_layout.addWidget(self._uncertainty_cb)
 
         control_layout.addStretch()
 
@@ -442,3 +533,7 @@ class TimelineView(QGroupBox):
         self._auto_follow = checked
         if checked:
             self._update_display()
+
+    def _toggle_uncertainty(self, checked: bool) -> None:
+        """Toggle uncertainty bands visibility."""
+        self._plot.set_uncertainty_visible(checked)
