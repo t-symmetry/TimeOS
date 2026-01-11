@@ -35,6 +35,7 @@ from timeos.clocks.system import (
 )
 
 from timeos.clocks.ntp import NTPClock
+from timeos.clocks.ptp import PTPClock, SimulatedPTPClock
 from timeos.clocks.gps import GPSClock, SimulatedGPSClock
 
 __all__ = [
@@ -53,6 +54,9 @@ __all__ = [
     "HighResolutionClock",
     # NTP
     "NTPClock",
+    # PTP
+    "PTPClock",
+    "SimulatedPTPClock",
     # GPS
     "GPSClock",
     "SimulatedGPSClock",

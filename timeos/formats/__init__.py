@@ -31,6 +31,17 @@ from timeos.formats.influx import (
     parse_influx_line,
     InfluxPoint,
 )
+from timeos.formats.hdf5_time import (
+    TemporalMetadata,
+    TimeUnit,
+    Calendar,
+    write_time_dataset,
+    read_time_dataset,
+    write_events_hdf5,
+    read_events_hdf5,
+    chrono_stamp_to_hdf5_attrs,
+    hdf5_attrs_to_chrono_stamp,
+)
 
 __all__ = [
     # ISO 8601
@@ -54,4 +65,14 @@ __all__ = [
     "format_influx_line",
     "parse_influx_line",
     "InfluxPoint",
+    # HDF5
+    "TemporalMetadata",
+    "TimeUnit",
+    "Calendar",
+    "write_time_dataset",
+    "read_time_dataset",
+    "write_events_hdf5",
+    "read_events_hdf5",
+    "chrono_stamp_to_hdf5_attrs",
+    "hdf5_attrs_to_chrono_stamp",
 ]
