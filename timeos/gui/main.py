@@ -724,7 +724,7 @@ class MainWindow(QMainWindow):
 
         # Restart with new mode
         import sys
-        import os
+        import subprocess
 
         # Build new command
         args = [sys.executable, "-m", "timeos", "gui"]
@@ -735,11 +735,17 @@ class MainWindow(QMainWindow):
         if new_ros2:
             args.append("--ros2")
 
-        # Close current window
-        self.close()
+        # Start new process (detached)
+        subprocess.Popen(
+            args,
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
-        # Start new process
-        os.execv(sys.executable, args)
+        # Close current application
+        from PySide6.QtWidgets import QApplication
+        QApplication.instance().quit()
 
     def _on_hil_config(self) -> None:
         """Open HIL configuration dialog."""
