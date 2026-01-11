@@ -159,6 +159,7 @@ class ROS2Bridge(QObject):
         self._launch_processes: Dict[str, QProcess] = {}
         self._echo_processes: Dict[str, QProcess] = {}
         self._service_processes: Dict[str, QProcess] = {}
+        self._query_processes: Dict[str, QProcess] = {}  # Temp processes for node/topic lists
 
         # Cached data
         self._nodes: List[NodeInfo] = []
@@ -422,12 +423,20 @@ class ROS2Bridge(QObject):
 
         process = QProcess(self)
         self._configure_process_env(process)
+        # Store reference to prevent garbage collection
+        self._query_processes['nodes'] = process
         process.finished.connect(lambda: self._on_node_list_finished(process))
         process.start(self._ros2_path or 'ros2', ['node', 'list'])
 
     def _on_node_list_finished(self, process: QProcess) -> None:
         """Handle node list completion."""
-        if process.exitCode() != 0:
+        self._query_processes.pop('nodes', None)
+
+        try:
+            if process.exitCode() != 0:
+                process.deleteLater()
+                return
+        except RuntimeError:
             return
 
         output = process.readAllStandardOutput().data().decode('utf-8')
@@ -465,12 +474,20 @@ class ROS2Bridge(QObject):
 
         process = QProcess(self)
         self._configure_process_env(process)
+        # Store reference to prevent garbage collection
+        self._query_processes['topics'] = process
         process.finished.connect(lambda: self._on_topic_list_finished(process))
         process.start(self._ros2_path or 'ros2', ['topic', 'list', '-t'])
 
     def _on_topic_list_finished(self, process: QProcess) -> None:
         """Handle topic list completion."""
-        if process.exitCode() != 0:
+        self._query_processes.pop('topics', None)
+
+        try:
+            if process.exitCode() != 0:
+                process.deleteLater()
+                return
+        except RuntimeError:
             return
 
         output = process.readAllStandardOutput().data().decode('utf-8')
@@ -503,12 +520,22 @@ class ROS2Bridge(QObject):
 
         process = QProcess(self)
         self._configure_process_env(process)
+        # Store reference to prevent garbage collection
+        self._service_processes['_list'] = process
         process.finished.connect(lambda: self._on_service_list_finished(process))
         process.start(self._ros2_path or 'ros2', ['service', 'list', '-t'])
 
     def _on_service_list_finished(self, process: QProcess) -> None:
         """Handle service list completion."""
-        if process.exitCode() != 0:
+        # Remove from tracking dict
+        self._service_processes.pop('_list', None)
+
+        try:
+            if process.exitCode() != 0:
+                process.deleteLater()
+                return
+        except RuntimeError:
+            # Process already deleted
             return
 
         output = process.readAllStandardOutput().data().decode('utf-8')
@@ -774,8 +801,11 @@ class ROS2Bridge(QObject):
         self._state_timer.stop()
         # Clean up any active poll processes
         for key, process in list(self._state_poll_processes.items()):
-            process.terminate()
-            process.deleteLater()
+            try:
+                process.terminate()
+                process.deleteLater()
+            except RuntimeError:
+                pass
         self._state_poll_processes.clear()
 
     def _poll_state_topics(self) -> None:
@@ -802,14 +832,24 @@ class ROS2Bridge(QObject):
 
     def _on_state_poll_finished(self, key: str, process: QProcess) -> None:
         """Handle state poll completion."""
-        if key in self._state_poll_processes:
-            del self._state_poll_processes[key]
+        try:
+            exit_code = process.exitCode()
+        except RuntimeError:
+            # Process already deleted
+            self._state_poll_processes.pop(key, None)
+            return
 
-        if process.exitCode() != 0:
+        # Remove from tracking dict after reading
+        self._state_poll_processes.pop(key, None)
+
+        if exit_code != 0:
             process.deleteLater()
             return
 
-        output = process.readAllStandardOutput().data().decode('utf-8')
+        try:
+            output = process.readAllStandardOutput().data().decode('utf-8')
+        except RuntimeError:
+            return
         process.deleteLater()
 
         # Parse YAML output to dict
@@ -969,7 +1009,21 @@ class ROS2Bridge(QObject):
             self.stop_launch(config_name)
 
         # Kill any remaining service processes
-        for service, process in self._service_processes.items():
-            process.terminate()
-            if not process.waitForFinished(1000):
-                process.kill()
+        for service, process in list(self._service_processes.items()):
+            try:
+                process.terminate()
+                if not process.waitForFinished(1000):
+                    process.kill()
+            except RuntimeError:
+                pass
+        self._service_processes.clear()
+
+        # Kill any remaining query processes
+        for key, process in list(self._query_processes.items()):
+            try:
+                process.terminate()
+                if not process.waitForFinished(1000):
+                    process.kill()
+            except RuntimeError:
+                pass
+        self._query_processes.clear()
