@@ -889,5 +889,296 @@ def _format_time(seconds: float) -> str:
         return f"{seconds:.3f} s"
 
 
+# =============================================================================
+# Correlation Commands
+# =============================================================================
+
+@cli.command("correlate")
+@click.argument("file1", type=click.Path(exists=True))
+@click.argument("file2", type=click.Path(exists=True))
+@click.option("--output", "-o", type=click.Path(), help="Output file for aligned data.")
+@click.option("--time-col", default="time", help="Column name for timestamps.")
+@click.option("--value-col", default="value", help="Column name for values.")
+@click.option("--max-offset", type=float, default=1.0, help="Maximum offset to search (seconds).")
+def correlate_cmd(
+    file1: str,
+    file2: str,
+    output: str | None,
+    time_col: str,
+    value_col: str,
+    max_offset: float,
+) -> None:
+    """Align two CSV data files by cross-correlation.
+
+    Finds the time offset between two data streams and optionally
+    outputs the aligned data.
+
+    Example:
+        timeos correlate sensor1.csv sensor2.csv -o aligned.csv
+    """
+    import csv
+
+    def load_csv(path: str) -> tuple[list[float], list[float]]:
+        """Load time/value pairs from CSV."""
+        times = []
+        values = []
+        with open(path, newline='') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    times.append(float(row[time_col]))
+                    values.append(float(row[value_col]))
+                except (KeyError, ValueError):
+                    continue
+        return times, values
+
+    try:
+        from timeos.correlation import find_offset, align_streams
+        from timeos.correlation.align import TimeSeries
+    except ImportError as e:
+        click.echo(f"Error loading correlation module: {e}")
+        sys.exit(1)
+
+    # Load data
+    click.echo(f"Loading {file1}...")
+    times1, values1 = load_csv(file1)
+    click.echo(f"  {len(times1)} samples")
+
+    click.echo(f"Loading {file2}...")
+    times2, values2 = load_csv(file2)
+    click.echo(f"  {len(times2)} samples")
+
+    if not times1 or not times2:
+        click.echo("Error: No valid data found in files.")
+        sys.exit(1)
+
+    # Create time series
+    series1 = TimeSeries(times=times1, values=values1)
+    series2 = TimeSeries(times=times2, values=values2)
+
+    # Find offset
+    click.echo("Computing cross-correlation...")
+    result = find_offset(series1, series2, max_offset=max_offset)
+
+    click.echo()
+    click.echo("Alignment Results")
+    click.echo("=" * 40)
+    click.echo(f"Offset:      {_format_time(result.offset)}")
+    click.echo(f"Uncertainty: {_format_time(result.offset_uncertainty)}")
+    click.echo(f"Correlation: {result.correlation:.4f}")
+    click.echo(f"Confidence:  {result.confidence * 100:.1f}%")
+
+    if result.correlation > 0.8:
+        click.echo(click.style("Alignment: Excellent", fg="green"))
+    elif result.correlation > 0.5:
+        click.echo(click.style("Alignment: Good", fg="green"))
+    elif result.correlation > 0.2:
+        click.echo(click.style("Alignment: Fair", fg="yellow"))
+    else:
+        click.echo(click.style("Alignment: Poor", fg="red"))
+
+    # Output aligned data if requested
+    if output:
+        _, aligned = align_streams(series1, series2, result)
+
+        with open(output, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([time_col, value_col, 'source'])
+
+            # Write series1
+            for t, v in zip(series1.times, series1.values):
+                writer.writerow([t, v, 'file1'])
+
+            # Write aligned series2
+            for t, v in zip(aligned.times, aligned.values):
+                writer.writerow([t, v, 'file2'])
+
+        click.echo(f"\nAligned data written to: {output}")
+
+
+# =============================================================================
+# Export Commands
+# =============================================================================
+
+@cli.group()
+def export() -> None:
+    """Export timeline data to various formats."""
+    pass
+
+
+@export.command("prov")
+@click.option("--format", "fmt", type=click.Choice(["ttl", "json"]), default="ttl",
+              help="Output format (ttl=Turtle, json=JSON-LD).")
+@click.option("--base-uri", default="http://example.org/timeos/",
+              help="Base URI for identifiers.")
+@click.option("--output", "-o", type=click.Path(), help="Output file (default: stdout).")
+@click.pass_context
+def export_prov(ctx: click.Context, fmt: str, base_uri: str, output: str | None) -> None:
+    """Export timeline to W3C PROV provenance format.
+
+    Exports events as PROV entities with derivation relationships
+    for provenance tracking and data lineage.
+
+    Example:
+        timeos export prov --format ttl > timeline.ttl
+        timeos export prov --format json -o timeline.jsonld
+    """
+    db_path = ctx.obj["db"]
+
+    try:
+        from timeos.formats.prov import export_timeline_prov
+    except ImportError as e:
+        click.echo(f"Error loading formats module: {e}")
+        sys.exit(1)
+
+    log = EventLog(db_path)
+
+    try:
+        result = export_timeline_prov(log, output_format=fmt, base_uri=base_uri)
+
+        if output:
+            with open(output, 'w') as f:
+                f.write(result)
+            click.echo(f"Exported to: {output}")
+        else:
+            click.echo(result)
+
+    finally:
+        log.close()
+
+
+@export.command("influx")
+@click.option("--measurement", default="timeos_event", help="InfluxDB measurement name.")
+@click.option("--output", "-o", type=click.Path(), help="Output file (default: stdout).")
+@click.pass_context
+def export_influx(ctx: click.Context, measurement: str, output: str | None) -> None:
+    """Export timeline to InfluxDB line protocol.
+
+    Generates line protocol that can be piped to `influx write` or
+    imported via the InfluxDB API.
+
+    Example:
+        timeos export influx > events.lp
+        timeos export influx | influx write -b mybucket
+    """
+    db_path = ctx.obj["db"]
+
+    try:
+        from timeos.formats.influx import format_events_influx
+    except ImportError as e:
+        click.echo(f"Error loading formats module: {e}")
+        sys.exit(1)
+
+    log = EventLog(db_path)
+
+    try:
+        events = list(log.query())
+
+        if not events:
+            click.echo("No events to export.", err=True)
+            return
+
+        result = format_events_influx(events, measurement=measurement)
+
+        if output:
+            with open(output, 'w') as f:
+                f.write(result)
+            click.echo(f"Exported {len(events)} events to: {output}", err=True)
+        else:
+            click.echo(result)
+
+    finally:
+        log.close()
+
+
+@export.command("json")
+@click.option("--pretty", is_flag=True, help="Pretty-print JSON output.")
+@click.option("--output", "-o", type=click.Path(), help="Output file (default: stdout).")
+@click.pass_context
+def export_json(ctx: click.Context, pretty: bool, output: str | None) -> None:
+    """Export timeline to JSON format.
+
+    Example:
+        timeos export json --pretty > timeline.json
+    """
+    import json as json_lib
+
+    db_path = ctx.obj["db"]
+    log = EventLog(db_path)
+
+    try:
+        events = [event.to_dict() for event in log.query()]
+
+        if pretty:
+            result = json_lib.dumps({"events": events}, indent=2)
+        else:
+            result = json_lib.dumps({"events": events})
+
+        if output:
+            with open(output, 'w') as f:
+                f.write(result)
+            click.echo(f"Exported {len(events)} events to: {output}", err=True)
+        else:
+            click.echo(result)
+
+    finally:
+        log.close()
+
+
+@export.command("csv")
+@click.option("--output", "-o", type=click.Path(), help="Output file (default: stdout).")
+@click.pass_context
+def export_csv(ctx: click.Context, output: str | None) -> None:
+    """Export timeline to CSV format.
+
+    Example:
+        timeos export csv -o timeline.csv
+    """
+    import csv
+    import io
+
+    db_path = ctx.obj["db"]
+    log = EventLog(db_path)
+
+    try:
+        events = list(log.query())
+
+        if not events:
+            click.echo("No events to export.", err=True)
+            return
+
+        # Prepare CSV
+        if output:
+            f = open(output, 'w', newline='')
+        else:
+            f = io.StringIO()
+
+        writer = csv.writer(f)
+        writer.writerow([
+            'event_id', 'frame_id', 't', 't_uncertainty',
+            'branch_id', 'event_type', 'author'
+        ])
+
+        for event in events:
+            writer.writerow([
+                event.event_id,
+                event.stamp.frame_id,
+                event.stamp.t,
+                event.stamp.t_uncertainty,
+                event.branch_id,
+                event.event_type,
+                event.author or '',
+            ])
+
+        if output:
+            f.close()
+            click.echo(f"Exported {len(events)} events to: {output}", err=True)
+        else:
+            click.echo(f.getvalue())
+
+    finally:
+        log.close()
+
+
 if __name__ == "__main__":
     cli()
