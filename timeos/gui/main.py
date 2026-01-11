@@ -401,6 +401,10 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._on_about)
         help_menu.addAction(about_action)
 
+        disclaimer_action = QAction("&Disclaimer", self)
+        disclaimer_action.triggered.connect(self._on_disclaimer)
+        help_menu.addAction(disclaimer_action)
+
     def _setup_statusbar(self) -> None:
         """Set up the status bar."""
         statusbar = self.statusBar()
@@ -689,6 +693,92 @@ class MainWindow(QMainWindow):
             "<p>&copy; T-Symmetry Labs</p>"
             "<p>Licensed under Apache 2.0</p>",
         )
+
+    def _on_disclaimer(self) -> None:
+        """Show disclaimer dialog."""
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QTextEdit, QPushButton
+        from PySide6.QtCore import Qt
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Temporal Control Framework - Disclaimer")
+        dialog.setMinimumSize(600, 500)
+
+        layout = QVBoxLayout(dialog)
+
+        text = QTextEdit()
+        text.setReadOnly(True)
+        text.setHtml("""
+<h2>TEMPORAL CONTROL FRAMEWORK - WARRANTY DISCLAIMER</h2>
+<p><b>BY USING THIS SOFTWARE, YOU ACKNOWLEDGE THAT:</b></p>
+
+<p><b>1. NO WARRANTY OF TIMELINE CONSISTENCY.</b> We make no guarantees that your
+current timeline will remain your original timeline, that causality will be preserved,
+or that you will continue to exist in a recognizable form.</p>
+
+<p><b>2. PARADOX RISK.</b> You assume all responsibility for grandfather paradoxes,
+bootstrap paradoxes, ontological paradoxes, and any other causal inconsistencies you
+create. This includes but is not limited to: preventing your own birth, creating
+stable time loops, or spawning divergent timelines.</p>
+
+<p><b>3. BUTTERFLY EFFECTS.</b> Any temporal displacement, however minor, may result
+in cascading changes to history. We are not liable for: altered election outcomes,
+prevented inventions, erased relationships, or the complete collapse of civilization
+as you knew it.</p>
+
+<p><b>4. BRANCH COHERENCE.</b> Timeline branches are maintained on a best-effort basis.
+We cannot guarantee you'll be able to return to your original branch, or that it will
+still exist when you try.</p>
+
+<p><b>5. CLOCK DRIFT CONSEQUENCES.</b> Microsecond-level synchronization errors may
+result in arriving at the wrong moment, location, or universe. This is your problem.</p>
+
+<p><b>6. ENERGY BUDGET VIOLATIONS.</b> Exceeding recommended energy parameters may
+result in localized spacetime instabilities, singularity formation, or conversion of
+matter into exotic states. Do not exceed 1.00e+15 J without adult supervision.</p>
+
+<p><b>7. CAUSALITY MONITOR ACCURACY.</b> The causality monitoring system reports
+violations based on best theoretical models. These models may be wrong. Violations
+above 15% indicate you should probably stop, but we're not your parents.</p>
+
+<p><b>8. DEMO MODE LIMITATIONS.</b> Demo mode uses simulated temporal physics.
+Behavior in live mode may differ substantially. "It worked in demo mode" is not
+a valid excuse.</p>
+
+<p><b>9. ROS2 DEPENDENCIES.</b> This system assumes ROS2 message passing occurs in
+chronological order. If you've managed to violate this assumption, congratulations,
+you've broken something we didn't think was breakable.</p>
+
+<p><b>10. NO TECHNICAL SUPPORT.</b> If you call for help, we may not exist yet,
+anymore, or in your current timeline. Email support@t-symmetry.org with your
+branch ID and hope we receive it.</p>
+
+<p><b>11. ASSUMPTION OF RISK.</b> You accept full responsibility for: destroying
+the universe, creating universe(s), merging timelines, splitting timelines, or
+getting stuck in a causal loop.</p>
+
+<p><b>12. RELEASE OF LIABILITY.</b> You release the developers from any claims
+arising from temporal displacement, including claims that cannot yet be formulated
+because the legal framework doesn't exist in your current temporal location.</p>
+
+<hr>
+
+<p><b>THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF TIMELINE STABILITY, FITNESS
+FOR TEMPORAL TRAVEL, OR NON-VIOLATION OF CAUSALITY.</b></p>
+
+<p><b>USE AT YOUR OWN RISK. SERIOUSLY.</b></p>
+
+<hr>
+
+<p><i>T-Symmetry Labs is not responsible for any version of you that no longer exists.</i></p>
+""")
+        layout.addWidget(text)
+
+        ok_btn = QPushButton("I Accept the Risks")
+        ok_btn.clicked.connect(dialog.accept)
+        layout.addWidget(ok_btn)
+
+        dialog.exec()
 
     def _on_toggle_module(self, module_id: str, enabled: bool) -> None:
         """Toggle a hardware module on/off."""
