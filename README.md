@@ -2,6 +2,8 @@
 
 **TimeOS is a sandbox for exploring non-monotonic timelines, causality constraints, and speculative execution — inspired by how time travel would need to be *managed*, not how it would be *built*.**
 
+*Useful for teaching temporal physics, synchronizing distributed systems, or controlling your actual time machine.*
+
 ---
 
 Time Operating System — a modular framework for temporal event systems with causality constraints.
