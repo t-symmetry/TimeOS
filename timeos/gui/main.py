@@ -335,6 +335,39 @@ class MainWindow(QMainWindow):
         ros2_action.triggered.connect(self._on_ros2_management)
         hardware_menu.addAction(ros2_action)
 
+        # Tools menu
+        tools_menu = menubar.addMenu("&Tools")
+
+        correlation_action = QAction("Stream &Correlation...", self)
+        correlation_action.setShortcut(QKeySequence("Ctrl+Shift+C"))
+        correlation_action.triggered.connect(self._on_correlation)
+        tools_menu.addAction(correlation_action)
+
+        drift_action = QAction("&Drift Monitor...", self)
+        drift_action.triggered.connect(self._on_drift_monitor)
+        tools_menu.addAction(drift_action)
+
+        tools_menu.addSeparator()
+
+        # Export submenu
+        export_menu = tools_menu.addMenu("&Export Timeline")
+
+        export_json_action = QAction("JSON...", self)
+        export_json_action.triggered.connect(lambda: self._on_export_format("json"))
+        export_menu.addAction(export_json_action)
+
+        export_csv_action = QAction("CSV...", self)
+        export_csv_action.triggered.connect(lambda: self._on_export_format("csv"))
+        export_menu.addAction(export_csv_action)
+
+        export_prov_action = QAction("W3C PROV (Turtle)...", self)
+        export_prov_action.triggered.connect(lambda: self._on_export_format("prov"))
+        export_menu.addAction(export_prov_action)
+
+        export_influx_action = QAction("InfluxDB Line Protocol...", self)
+        export_influx_action.triggered.connect(lambda: self._on_export_format("influx"))
+        export_menu.addAction(export_influx_action)
+
         # Learn menu
         learn_menu = menubar.addMenu("&Learn")
 
@@ -820,6 +853,139 @@ class MainWindow(QMainWindow):
             "Hardware Status",
             "".join(lines)
         )
+
+    def _on_correlation(self) -> None:
+        """Open stream correlation dialog."""
+        from timeos.gui.dialogs.correlation_dialog import CorrelationDialog
+
+        dialog = CorrelationDialog(self)
+        dialog.exec()
+
+    def _on_drift_monitor(self) -> None:
+        """Open drift monitor dialog."""
+        from PySide6.QtWidgets import QDialog, QVBoxLayout
+        from timeos.gui.widgets.drift_plot import DriftPlotWidget
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Clock Drift Monitor")
+        dialog.setMinimumSize(600, 400)
+
+        layout = QVBoxLayout(dialog)
+        drift_widget = DriftPlotWidget()
+        layout.addWidget(drift_widget)
+
+        # Add some demo data if in demo mode
+        if self._demo:
+            drift_widget.add_clock_source("ntp", "ntp")
+            drift_widget.add_clock_source("system", "system")
+
+            # Simulate some drift samples
+            import random
+            for i in range(50):
+                offset = random.gauss(0, 50e-6)  # ~50µs jitter
+                uncertainty = random.uniform(1e-6, 10e-6)
+                drift_widget.add_sample("ntp", offset, uncertainty)
+
+                offset2 = random.gauss(100e-6, 20e-6)  # 100µs offset
+                drift_widget.add_sample("system", offset2, uncertainty * 2)
+
+        dialog.exec()
+
+    def _on_export_format(self, format_type: str) -> None:
+        """Export timeline in specified format."""
+        from PySide6.QtWidgets import QFileDialog
+
+        # Get file extension and filter based on format
+        extensions = {
+            "json": ("JSON Files (*.json)", ".json"),
+            "csv": ("CSV Files (*.csv)", ".csv"),
+            "prov": ("Turtle Files (*.ttl)", ".ttl"),
+            "influx": ("Text Files (*.txt)", ".txt"),
+        }
+
+        filter_str, ext = extensions.get(format_type, ("All Files (*)", ""))
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            f"Export Timeline as {format_type.upper()}",
+            f"timeline{ext}",
+            filter_str,
+        )
+
+        if not path:
+            return
+
+        try:
+            events = self._model.get_timeline_events()
+
+            if format_type == "json":
+                import json
+                with open(path, 'w') as f:
+                    json.dump([e for e in events], f, indent=2, default=str)
+
+            elif format_type == "csv":
+                import csv
+                with open(path, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["event_id", "timestamp", "uncertainty", "event_type", "branch_id"])
+                    for e in events:
+                        stamp = e.get("stamp", {})
+                        writer.writerow([
+                            e.get("event_id", ""),
+                            stamp.get("t", 0),
+                            stamp.get("t_uncertainty", 0),
+                            e.get("event_type", ""),
+                            e.get("branch_id", "main"),
+                        ])
+
+            elif format_type == "prov":
+                # Generate W3C PROV-O Turtle
+                lines = [
+                    "@prefix prov: <http://www.w3.org/ns/prov#> .",
+                    "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .",
+                    "@prefix timeos: <http://timeos.example.org/ns#> .",
+                    "",
+                ]
+                for e in events:
+                    event_id = e.get("event_id", "unknown")
+                    stamp = e.get("stamp", {})
+                    lines.append(f"timeos:{event_id} a prov:Activity ;")
+                    lines.append(f"    prov:startedAtTime \"{stamp.get('t', 0)}\"^^xsd:decimal ;")
+                    parents = e.get("parents", [])
+                    if parents:
+                        parent_refs = ", ".join(f"timeos:{p}" for p in parents)
+                        lines.append(f"    prov:wasInformedBy {parent_refs} ;")
+                    lines.append(f"    timeos:eventType \"{e.get('event_type', '')}\" .")
+                    lines.append("")
+
+                with open(path, 'w') as f:
+                    f.write("\n".join(lines))
+
+            elif format_type == "influx":
+                # Generate InfluxDB line protocol
+                lines = []
+                for e in events:
+                    stamp = e.get("stamp", {})
+                    t_ns = int(stamp.get("t", 0) * 1e9)
+                    event_type = e.get("event_type", "unknown").replace(" ", "\\ ")
+                    branch = e.get("branch_id", "main")
+                    uncertainty = stamp.get("t_uncertainty", 0)
+                    lines.append(
+                        f"timeline_event,branch={branch},type={event_type} "
+                        f"uncertainty={uncertainty} {t_ns}"
+                    )
+
+                with open(path, 'w') as f:
+                    f.write("\n".join(lines))
+
+            QMessageBox.information(
+                self,
+                "Export Complete",
+                f"Exported {len(events)} events to:\n{path}"
+            )
+
+        except Exception as e:
+            QMessageBox.critical(self, "Export Failed", str(e))
 
     def _save_settings(self) -> None:
         """Save window state to settings."""
