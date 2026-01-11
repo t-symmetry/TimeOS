@@ -644,5 +644,250 @@ def learn_show(name: str, step: int | None) -> None:
     click.echo("=" * 60)
 
 
+# =============================================================================
+# Clock Commands
+# =============================================================================
+
+@cli.group()
+def clock() -> None:
+    """Manage clock sources and time synchronization."""
+    pass
+
+
+@clock.command("status")
+@click.option("--json", "json_output", is_flag=True, help="Output as JSON.")
+def clock_status(json_output: bool) -> None:
+    """Show status of all clock sources.
+
+    Displays current time sources with quality metrics including
+    offset, uncertainty, stratum, and synchronization status.
+    """
+    try:
+        from timeos.clocks import (
+            ClockRegistry,
+            RealtimeClock,
+            MonotonicClock,
+            NTPClock,
+        )
+    except ImportError as e:
+        click.echo(f"Error loading clocks module: {e}")
+        sys.exit(1)
+
+    # Create registry with available clocks
+    registry = ClockRegistry()
+
+    # Add system clocks
+    registry.register(RealtimeClock())
+    registry.register(MonotonicClock())
+
+    # Try NTP
+    try:
+        ntp = NTPClock()
+        if ntp.ntp_daemon:
+            registry.register(ntp)
+    except Exception:
+        pass
+
+    if json_output:
+        import json as json_lib
+        data = []
+        for clock in registry:
+            quality = clock.get_quality()
+            data.append({
+                "source_id": clock.source_id,
+                "type": clock.clock_type.value,
+                "status": clock.status.name,
+                "stratum": quality.stratum,
+                "offset": quality.offset,
+                "uncertainty": quality.estimated_error,
+                "jitter": quality.jitter,
+                "quality_score": quality.quality_score,
+            })
+        click.echo(json_lib.dumps(data, indent=2))
+        return
+
+    click.echo("Clock Sources")
+    click.echo("=" * 60)
+
+    for clock in registry:
+        quality = clock.get_quality()
+        stamp = clock.now()
+
+        status_color = {
+            "SYNCED": "green",
+            "DEGRADED": "yellow",
+            "FREERUN": "red",
+            "FAULT": "red",
+        }.get(clock.status.name, "white")
+
+        click.echo("")
+        click.echo(click.style(f"  {clock.source_id}", bold=True) +
+                   f" ({clock.clock_type.value})")
+        click.echo(f"    Status:      {click.style(clock.status.name, fg=status_color)}")
+        click.echo(f"    Stratum:     {quality.stratum}")
+        click.echo(f"    Offset:      {_format_time(quality.offset)}")
+        click.echo(f"    Uncertainty: ±{_format_time(quality.estimated_error)}")
+        click.echo(f"    Jitter:      {_format_time(quality.jitter)}")
+        click.echo(f"    Quality:     {quality.quality_score*100:.1f}%")
+
+    # Show best clock
+    best = registry.get_best()
+    if best:
+        click.echo("")
+        click.echo(f"Best source: {click.style(best.source_id, fg='green', bold=True)}")
+
+    click.echo("")
+
+
+@clock.command("now")
+@click.option("--source", "-s", help="Specific clock source to use.")
+@click.option("--format", "-f", "fmt", default="iso",
+              type=click.Choice(["iso", "unix", "tai"]),
+              help="Output format.")
+def clock_now(source: str | None, fmt: str) -> None:
+    """Get current time from clock sources.
+
+    Returns current time with uncertainty from the best available
+    clock source, or a specific source if specified.
+    """
+    try:
+        from timeos.clocks import (
+            ClockRegistry,
+            RealtimeClock,
+            MonotonicClock,
+            NTPClock,
+        )
+    except ImportError as e:
+        click.echo(f"Error loading clocks module: {e}")
+        sys.exit(1)
+
+    from datetime import datetime, timezone
+
+    # Create registry
+    registry = ClockRegistry()
+    registry.register(RealtimeClock())
+    registry.register(MonotonicClock())
+
+    try:
+        ntp = NTPClock()
+        if ntp.ntp_daemon:
+            registry.register(ntp)
+    except Exception:
+        pass
+
+    # Get clock
+    if source:
+        clock = registry.get(source)
+        if not clock:
+            click.echo(f"Unknown clock source: {source}")
+            click.echo(f"Available: {', '.join(c.source_id for c in registry)}")
+            sys.exit(1)
+    else:
+        clock = registry.get_best()
+
+    if not clock:
+        click.echo("No clock sources available")
+        sys.exit(1)
+
+    stamp = clock.now()
+
+    if fmt == "unix":
+        click.echo(f"{stamp.t:.9f} ±{stamp.t_uncertainty:.9f}")
+    elif fmt == "tai":
+        # TAI is UTC + leap seconds (currently 37)
+        tai = stamp.t + 37
+        click.echo(f"{tai:.9f} ±{stamp.t_uncertainty:.9f} TAI")
+    else:  # iso
+        dt = datetime.fromtimestamp(stamp.t, tz=timezone.utc)
+        click.echo(f"{dt.isoformat()} ±{_format_time(stamp.t_uncertainty)}")
+        click.echo(f"Source: {clock.source_id} ({clock.clock_type.value})")
+
+
+@clock.command("drift")
+@click.option("--duration", "-d", default=10.0, help="Measurement duration in seconds.")
+@click.option("--interval", "-i", default=1.0, help="Sample interval in seconds.")
+def clock_drift(duration: float, interval: float) -> None:
+    """Measure clock drift over time.
+
+    Compares monotonic and realtime clocks to estimate drift.
+    """
+    import time
+
+    click.echo(f"Measuring drift for {duration:.1f}s (interval: {interval:.1f}s)...")
+    click.echo("")
+
+    samples = []
+    start_mono = time.monotonic()
+    start_real = time.time()
+
+    while True:
+        elapsed = time.monotonic() - start_mono
+        if elapsed >= duration:
+            break
+
+        mono = time.monotonic()
+        real = time.time()
+
+        # Difference from start
+        mono_elapsed = mono - start_mono
+        real_elapsed = real - start_real
+
+        # Drift is difference between clocks
+        drift = real_elapsed - mono_elapsed
+        samples.append((mono_elapsed, drift))
+
+        time.sleep(interval)
+
+    if len(samples) < 2:
+        click.echo("Not enough samples collected")
+        return
+
+    # Calculate drift rate (linear regression)
+    n = len(samples)
+    sum_x = sum(s[0] for s in samples)
+    sum_y = sum(s[1] for s in samples)
+    sum_xy = sum(s[0] * s[1] for s in samples)
+    sum_xx = sum(s[0] ** 2 for s in samples)
+
+    slope = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x ** 2)
+    intercept = (sum_y - slope * sum_x) / n
+
+    drift_ppm = slope * 1e6
+
+    click.echo(f"Samples:      {n}")
+    click.echo(f"Duration:     {samples[-1][0]:.1f}s")
+    click.echo(f"Total drift:  {_format_time(samples[-1][1])}")
+    click.echo(f"Drift rate:   {drift_ppm:.3f} ppm")
+
+    if abs(drift_ppm) < 0.1:
+        click.echo(click.style("Drift: Excellent (<0.1 ppm)", fg="green"))
+    elif abs(drift_ppm) < 1.0:
+        click.echo(click.style("Drift: Good (<1 ppm)", fg="green"))
+    elif abs(drift_ppm) < 10.0:
+        click.echo(click.style("Drift: Acceptable (<10 ppm)", fg="yellow"))
+    else:
+        click.echo(click.style(f"Drift: High ({drift_ppm:.1f} ppm)", fg="red"))
+
+
+def _format_time(seconds: float) -> str:
+    """Format time value with appropriate units."""
+    if seconds == float('inf') or seconds != seconds:  # NaN check
+        return "--"
+
+    abs_s = abs(seconds)
+    if abs_s == 0:
+        return "0"
+    elif abs_s < 1e-9:
+        return f"{seconds*1e12:.1f} ps"
+    elif abs_s < 1e-6:
+        return f"{seconds*1e9:.1f} ns"
+    elif abs_s < 1e-3:
+        return f"{seconds*1e6:.1f} µs"
+    elif abs_s < 1:
+        return f"{seconds*1e3:.1f} ms"
+    else:
+        return f"{seconds:.3f} s"
+
+
 if __name__ == "__main__":
     cli()

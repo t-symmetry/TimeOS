@@ -26,6 +26,7 @@ from timeos.gui.widgets.event_log import EventLogWidget
 from timeos.gui.widgets.control_panel import ControlPanel
 from timeos.gui.widgets.thermal_panel import ThermalPanel
 from timeos.gui.widgets.data_logger_panel import DataLoggerPanel
+from timeos.gui.widgets.clock_status_panel import ClockStatusPanel
 from timeos.gui.models.machine_model import MachineModel
 
 
@@ -127,6 +128,10 @@ class MainWindow(QMainWindow):
         # Field monitor
         self._field_monitor = FieldMonitor(self._model)
         layout.addWidget(self._field_monitor)
+
+        # Clock status panel
+        self._clock_panel = ClockStatusPanel()
+        layout.addWidget(self._clock_panel)
 
         # Thermal panel (only in emulated mode)
         if self._emulated:
@@ -844,5 +849,6 @@ class MainWindow(QMainWindow):
         """Handle window close."""
         self._save_settings()
         self._update_timer.stop()
+        self._clock_panel.stop()
         self._model.shutdown()
         event.accept()

@@ -11,6 +11,7 @@ from timeos.gui.widgets.event_log import EventLogWidget
 from timeos.gui.widgets.control_panel import ControlPanel
 from timeos.gui.widgets.thermal_panel import ThermalPanel
 from timeos.gui.widgets.data_logger_panel import DataLoggerPanel
+from timeos.gui.widgets.clock_status_panel import ClockStatusPanel
 
 __all__ = [
     "StatusPanel",
@@ -21,4 +22,5 @@ __all__ = [
     "ControlPanel",
     "ThermalPanel",
     "DataLoggerPanel",
+    "ClockStatusPanel",
 ]
