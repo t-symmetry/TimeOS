@@ -102,35 +102,14 @@ for e in timeline.slice(branch_id="hypothesis_1"):
 ### CLI
 
 ```bash
-# Initialize a timeline
-timeos init
+# Launch GUI (recommended)
+timeos gui
 
-# Add an event
-echo '{"stamp": {"frame_id": "lab", "t": 0.0}, "event_type": "observation"}' > event.json
-timeos log event.json
-
-# Query events
-timeos query --start 0 --end 10
-
-# Manage branches
-timeos branch create experiment_1
-timeos branch list
-
-# Validate consistency
-timeos validate
-
-# Export/import
-timeos export backup.json
-timeos import backup.json
-
-# Clock management
-timeos clock status          # Show all clock sources
-timeos clock now             # Current time from best source
-timeos clock drift --duration 60  # Measure drift
-
-# Stream correlation
-timeos correlate stream1.csv stream2.csv -o aligned.csv
-timeos resample data.csv -o uniform.csv --rate 100
+# Or use CLI for scripting
+timeos init                    # Initialize timeline
+timeos query --start 0 --end 10  # Query events
+timeos branch list             # List branches
+timeos validate                # Check consistency
 ```
 
 ## Architecture
@@ -386,22 +365,21 @@ ros_time = bridge.chrono_to_ros2(chrono)
 
 Launch the graphical interface:
 ```bash
-timeos gui              # Normal mode
-timeos gui --demo       # Demo mode with simulated activity
-timeos gui --emulated   # Emulated hardware with realistic behavior
-timeos gui --ros2       # ROS2 mode (connects to ROS2 nodes)
+timeos gui    # Opens mode selector, then launches
 ```
 
-### GUI Modes
+On startup, a mode selector dialog lets you choose:
 
 | Mode | Description |
 |------|-------------|
-| Normal | Direct Python hardware abstraction |
-| Demo (`--demo`) | Simulated activity for demonstrations |
-| Emulated (`--emulated`) | Realistic hardware emulation with thermal modeling, timing profiles, and failure modes |
-| ROS2 (`--ros2`) | Hardware-agnostic mode using ROS2 for all state and control |
+| **Demo** | Simulated activity for demonstrations (default) |
+| **Emulated** | Realistic hardware emulation with thermal modeling, timing profiles, and failure modes |
+| **Normal** | Direct Python hardware abstraction |
+| **ROS2** | Hardware-agnostic mode using ROS2 for all state and control |
 
-**ROS2 Mode**: The GUI auto-detects the `timeos-ros` conda environment and communicates exclusively through ROS2 topics and services. This enables true digital twin operation where the GUI is decoupled from hardware implementation.
+You can also skip the selector with flags: `timeos gui --demo`, `--emulated`, `--ros2`
+
+Switch modes anytime from **Hardware -> Mode** in the menu.
 
 ### Features
 - Real-time system status with LED indicators
