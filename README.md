@@ -8,26 +8,21 @@
 
 ## ROS2 Hardware Integration
 
-TimeOS is built around **ROS2** for real hardware integration, supporting parallel emulated and physical experiments:
+TimeOS uses ROS2 as a **Hardware-in-the-Loop (HIL) co-simulation framework**. Emulated and physical hardware share the same message bus, allowing parallel execution for validation.
 
-| Mode | Description |
-|------|-------------|
-| **Emulated** | Full hardware simulation with realistic timing, thermal models, and failure injection |
-| **Real Hardware** | Direct control of lab equipment via NI DAQ, LabVIEW bridges, and custom drivers |
-| **Hybrid** | Run emulated and real hardware side-by-side — validate algorithms in simulation while controlling actual equipment |
+| Mode | Use Case |
+|------|----------|
+| **Emulated** | Desk validation with thermal models, timing jitter, failure injection |
+| **Physical** | Lab hardware via NI DAQ, LabVIEW, custom drivers |
+| **HIL** | Both running in parallel — compare simulated vs measured data in real-time |
 
 ```bash
-# Launch with emulated hardware
-ros2 launch timeos_ros simulation.launch.py
-
-# Launch with real hardware
-ros2 launch timeos_ros hardware.launch.py
-
-# Mixed mode - choose per-module
-ros2 launch timeos_ros mixed_mode.launch.py use_real_field:=true
+ros2 launch timeos_ros simulation.launch.py      # Emulated
+ros2 launch timeos_ros hardware.launch.py        # Physical
+ros2 launch timeos_ros mixed_mode.launch.py      # HIL co-simulation
 ```
 
-The same GUI, the same ROS2 topics, the same code — whether you're running a desk simulation or a live experiment.
+Same code, same topics, same GUI across all modes.
 
 ---
 
