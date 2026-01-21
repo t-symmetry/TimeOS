@@ -390,6 +390,16 @@ Launch the graphical interface:
 timeos gui    # Opens mode selector, then launches
 ```
 
+### Screenshots
+
+**Main Control Interface** — Timeline visualization, relativistic quantities, simultaneity offset, and real-time event log:
+
+![TimeOS Main Interface](docs/images/timeos-main.png)
+
+**ROS2 Management** — Launch configurations, node status, and topic/service browser:
+
+![ROS2 Management Dialog](docs/images/timeos-ros2-management.png)
+
 On startup, a mode selector dialog lets you choose:
 
 | Mode | Description |
