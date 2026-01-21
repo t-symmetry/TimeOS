@@ -527,4 +527,6 @@ Select which modules use real vs. emulated drivers per-component.
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE) for details.
+Copyright (c) 2024-2026 T-Symmetry Labs. All Rights Reserved.
+
+See [LICENSE](LICENSE) for details.

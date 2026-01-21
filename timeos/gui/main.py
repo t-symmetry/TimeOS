@@ -695,8 +695,7 @@ class MainWindow(QMainWindow):
             "<h2>TimeOS Control</h2>"
             "<p>Version 0.1.0</p>"
             "<p>Mission Control interface for temporal operations.</p>"
-            "<p>&copy; T-Symmetry Labs</p>"
-            "<p>Licensed under Apache 2.0</p>",
+            "<p>Copyright &copy; 2024-2026 T-Symmetry Labs. All Rights Reserved.</p>",
         )
 
     def _on_disclaimer(self) -> None:

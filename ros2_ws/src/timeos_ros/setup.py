@@ -24,7 +24,7 @@ setup(
     maintainer='TimeOS Contributors',
     maintainer_email='timeos@t-symmetry.org',
     description='ROS2 nodes for TimeOS temporal research platform',
-    license='Apache-2.0',
+    license='Proprietary',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
