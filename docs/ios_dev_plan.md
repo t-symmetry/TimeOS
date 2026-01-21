@@ -6,7 +6,7 @@ Native iOS port of TimeOS using SwiftUI. Full temporal physics engine running lo
 
 **Target:** iOS 17+ / iPadOS 17+ (Swift 5.9, SwiftUI)
 
-**Build Machine:** Mac Mini M1 @ 192.168.100.32 (user: jbrame)
+**Build Machine:** Mac Mini M1 with Xcode 15+
 
 ---
 
@@ -429,7 +429,7 @@ dependencies: [
 ### Initial Setup (on Mac Mini)
 
 ```bash
-ssh jbrame@192.168.100.32
+ssh <your-username>@<your-mac-ip>
 
 # Create project
 mkdir -p ~/Development/TimeOSiOS
