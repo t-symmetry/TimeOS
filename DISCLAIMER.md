@@ -20,7 +20,7 @@
 
 9. **ROS2 DEPENDENCIES.** This system assumes ROS2 message passing occurs in chronological order. If you've managed to violate this assumption, congratulations, you've broken something we didn't think was breakable.
 
-10. **NO TECHNICAL SUPPORT.** If you call for help, we may not exist yet, anymore, or in your current timeline. Email support@t-symmetry.org with your branch ID and hope we receive it.
+10. **NO TECHNICAL SUPPORT.** If you call for help, we may not exist yet, anymore, or in your current timeline. Email T-Symmetry@skylarkSoftware.me with your branch ID and hope we receive it.
 
 11. **ASSUMPTION OF RISK.** You accept full responsibility for: destroying the universe, creating universe(s), merging timelines, splitting timelines, or getting stuck in a causal loop.
 
@@ -34,4 +34,4 @@
 
 ---
 
-*T-Symmetry Labs is not responsible for any version of you that no longer exists.*
+*Skylark Software LLC is not responsible for any version of you that no longer exists.*

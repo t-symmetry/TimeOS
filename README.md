@@ -527,6 +527,6 @@ Select which modules use real vs. emulated drivers per-component.
 
 ## License
 
-Copyright (c) 2024-2026 T-Symmetry Labs. All Rights Reserved.
+Copyright (c) 2024-2026 Skylark Software LLC. All Rights Reserved.
 
 See [LICENSE](LICENSE) for details.

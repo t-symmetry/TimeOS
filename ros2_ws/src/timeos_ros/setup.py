@@ -22,7 +22,7 @@ setup(
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='TimeOS Contributors',
-    maintainer_email='timeos@t-symmetry.org',
+    maintainer_email='T-Symmetry@skylarkSoftware.me',
     description='ROS2 nodes for TimeOS temporal research platform',
     license='Proprietary',
     tests_require=['pytest'],

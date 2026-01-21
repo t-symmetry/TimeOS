@@ -695,7 +695,7 @@ class MainWindow(QMainWindow):
             "<h2>TimeOS Control</h2>"
             "<p>Version 0.1.0</p>"
             "<p>Mission Control interface for temporal operations.</p>"
-            "<p>Copyright &copy; 2024-2026 T-Symmetry Labs. All Rights Reserved.</p>",
+            "<p>Copyright &copy; 2024-2026 Skylark Software LLC. All Rights Reserved.</p>",
         )
 
     def _on_disclaimer(self) -> None:
@@ -753,7 +753,7 @@ chronological order. If you've managed to violate this assumption, congratulatio
 you've broken something we didn't think was breakable.</p>
 
 <p><b>10. NO TECHNICAL SUPPORT.</b> If you call for help, we may not exist yet,
-anymore, or in your current timeline. Email support@t-symmetry.org with your
+anymore, or in your current timeline. Email T-Symmetry@skylarkSoftware.me with your
 branch ID and hope we receive it.</p>
 
 <p><b>11. ASSUMPTION OF RISK.</b> You accept full responsibility for: destroying
@@ -774,7 +774,7 @@ FOR TEMPORAL TRAVEL, OR NON-VIOLATION OF CAUSALITY.</b></p>
 
 <hr>
 
-<p><i>T-Symmetry Labs is not responsible for any version of you that no longer exists.</i></p>
+<p><i>Skylark Software LLC is not responsible for any version of you that no longer exists.</i></p>
 """)
         layout.addWidget(text)
 
@@ -1139,13 +1139,13 @@ FOR TEMPORAL TRAVEL, OR NON-VIOLATION OF CAUSALITY.</b></p>
 
     def _save_settings(self) -> None:
         """Save window state to settings."""
-        settings = QSettings("T-Symmetry Labs", "TimeOS Control")
+        settings = QSettings("Skylark Software LLC", "TimeOS Control")
         settings.setValue("geometry", self.saveGeometry())
         settings.setValue("windowState", self.saveState())
 
     def _restore_settings(self) -> None:
         """Restore window state from settings."""
-        settings = QSettings("T-Symmetry Labs", "TimeOS Control")
+        settings = QSettings("Skylark Software LLC", "TimeOS Control")
         geometry = settings.value("geometry")
         if geometry:
             self.restoreGeometry(geometry)

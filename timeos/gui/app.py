@@ -39,7 +39,7 @@ def launch(demo: bool = False, emulated: bool = False, ros2: bool = False) -> in
     app = QApplication(sys.argv)
     app.setApplicationName("TimeOS Control")
     app.setApplicationVersion("0.1.0")
-    app.setOrganizationName("T-Symmetry Labs")
+    app.setOrganizationName("Skylark Software LLC")
 
     # Set default font
     font = QFont("Monospace", 10)
