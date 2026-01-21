@@ -75,6 +75,10 @@ class MachineModel(QObject):
         self._velocity_beta = 0.0  # v/c (fraction of light speed)
         self._proper_time = 0.0    # τ (proper time accumulated)
 
+        # Simultaneity offset tracking (Andromeda Paradox)
+        self._target_distance_ly = 2.5e6  # Default: Andromeda Galaxy (2.5 million ly)
+        self._simultaneity_offset = 0.0   # Calculated offset in years
+
         # Module enable states (for Hardware menu)
         self._modules_enabled = {
             "field_generator": True,
@@ -240,6 +244,8 @@ class MachineModel(QObject):
         if self._velocity_beta < 1.0:
             gamma = lorentz_factor(self._velocity_beta)
             self._proper_time += dt_coord / gamma
+            # Calculate simultaneity offset: Δt = γ × β × D
+            self._simultaneity_offset = gamma * self._velocity_beta * self._target_distance_ly
 
         # Create demo branches after a few ticks (if timeline available)
         if not self._demo_branches_created and self._demo_tick_count >= 3 and self._machine:
@@ -328,6 +334,8 @@ class MachineModel(QObject):
             gamma = lorentz_factor(self._velocity_beta)
             dt_proper = dt_coord / gamma
             self._proper_time += dt_proper
+            # Calculate simultaneity offset: Δt = γ × β × D
+            self._simultaneity_offset = gamma * self._velocity_beta * self._target_distance_ly
 
         # Create demo branches after a few ticks to show branch visualization
         if not self._demo_branches_created and self._demo_tick_count >= 3 and self._machine:
@@ -523,6 +531,10 @@ class MachineModel(QObject):
             "velocity_beta": self._velocity_beta,
             "lorentz_gamma": lorentz_factor(self._velocity_beta) if 0 < self._velocity_beta < 1 else 1.0,
             "proper_time": self._proper_time,
+
+            # Simultaneity offset (Andromeda Paradox)
+            "target_distance_ly": self._target_distance_ly,
+            "simultaneity_offset_years": self._simultaneity_offset,
         }
 
     def _get_emulated_state(self) -> dict[str, Any]:
@@ -598,6 +610,10 @@ class MachineModel(QObject):
             "lorentz_gamma": lorentz_factor(self._velocity_beta) if 0 < self._velocity_beta < 1 else 1.0,
             "proper_time": self._proper_time,
 
+            # Simultaneity offset (Andromeda Paradox)
+            "target_distance_ly": self._target_distance_ly,
+            "simultaneity_offset_years": self._simultaneity_offset,
+
             # Emulated-specific
             "machine_state": machine_state.value if machine_state else "unknown",
             "ramp_state": field.get("ramp_state", "idle"),
@@ -631,6 +647,8 @@ class MachineModel(QObject):
             "velocity_beta": 0.0,
             "lorentz_gamma": 1.0,
             "proper_time": 0.0,
+            "target_distance_ly": 2.5e6,
+            "simultaneity_offset_years": 0.0,
         }
 
     def get_module_statuses(self) -> dict[str, str]:
@@ -997,3 +1015,15 @@ class MachineModel(QObject):
     def is_demo(self) -> bool:
         """Return True if running in demo mode."""
         return self._demo
+
+    def set_target_distance(self, distance_ly: float) -> None:
+        """Set the target distance for simultaneity offset calculation.
+
+        Args:
+            distance_ly: Distance in light-years.
+        """
+        self._target_distance_ly = distance_ly
+        # Recalculate simultaneity offset
+        gamma = lorentz_factor(self._velocity_beta) if 0 < self._velocity_beta < 1 else 1.0
+        self._simultaneity_offset = gamma * self._velocity_beta * self._target_distance_ly
+        self.state_changed.emit()

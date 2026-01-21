@@ -20,6 +20,7 @@ from PySide6.QtGui import QAction, QKeySequence
 
 from timeos.gui.widgets.status_panel import StatusPanel
 from timeos.gui.widgets.position_display import PositionDisplay
+from timeos.gui.widgets.simultaneity_widget import SimultaneityWidget
 from timeos.gui.widgets.field_monitor import FieldMonitor
 from timeos.gui.widgets.timeline_view import TimelineView
 from timeos.gui.widgets.event_log import EventLogWidget
@@ -124,6 +125,10 @@ class MainWindow(QMainWindow):
         # Position display
         self._position_display = PositionDisplay(self._model)
         layout.addWidget(self._position_display)
+
+        # Simultaneity offset display (Andromeda Paradox)
+        self._simultaneity_widget = SimultaneityWidget(self._model)
+        layout.addWidget(self._simultaneity_widget)
 
         # Field monitor
         self._field_monitor = FieldMonitor(self._model)

@@ -5,6 +5,7 @@ Custom widgets for the mission control interface.
 
 from timeos.gui.widgets.status_panel import StatusPanel
 from timeos.gui.widgets.position_display import PositionDisplay
+from timeos.gui.widgets.simultaneity_widget import SimultaneityWidget
 from timeos.gui.widgets.field_monitor import FieldMonitor
 from timeos.gui.widgets.timeline_view import TimelineView
 from timeos.gui.widgets.event_log import EventLogWidget
@@ -17,6 +18,7 @@ from timeos.gui.widgets.drift_plot import DriftPlot, DriftPlotWidget
 __all__ = [
     "StatusPanel",
     "PositionDisplay",
+    "SimultaneityWidget",
     "FieldMonitor",
     "TimelineView",
     "EventLogWidget",
